@@ -1,0 +1,26 @@
+[
+  {
+    "query": "AI vendor risk procurement guide",
+    "expectedIds": ["document-responsible-ai-procurement"]
+  },
+  {
+    "query": "local search evaluation metrics",
+    "expectedIds": ["tool-local-index-benchmark", "tool-atlas-vector-toolkit"]
+  },
+  {
+    "query": "supplier discovery service for procurement",
+    "expectedIds": ["service-supplier-discovery-sprint"]
+  },
+  {
+    "query": "taxonomy governance and facets",
+    "expectedIds": ["document-taxonomy-governance-playbook"]
+  },
+  {
+    "query": "security reviewer for AI vendors",
+    "expectedIds": ["person-sam-rivera"]
+  },
+  {
+    "query": "support provider for help desk operations",
+    "expectedIds": ["vendor-opendesk-support"]
+  }
+]

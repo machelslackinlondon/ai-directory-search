@@ -1,0 +1,27 @@
+{
+  "name": "ai-directory-search",
+  "version": "0.1.0",
+  "description": "Local-first AI-assisted directory search app with mock MCP tools.",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "node": ">=16.19"
+  },
+  "scripts": {
+    "dev": "node src/server/index.js",
+    "start": "node src/server/index.js",
+    "seed": "node scripts/seed.js",
+    "index": "node scripts/index.js",
+    "test": "node scripts/run-tests.js",
+    "eval": "node src/server/evals/runEvaluation.js",
+    "mcp": "node scripts/mcp-cli.js"
+  },
+  "keywords": [
+    "directory",
+    "search",
+    "ai",
+    "mcp",
+    "local-first"
+  ],
+  "license": "MIT"
+}

@@ -1,0 +1,30 @@
+{
+  "entries": [
+    {
+      "id": "tool-fixture-directory-map",
+      "name": "Fixture Directory Map",
+      "description": "Test fixture tool for mapping directory entries and checking import behavior.",
+      "category": "tools",
+      "tags": ["fixture", "search"],
+      "location": "Test suite",
+      "url": "https://example.com/fixtures/directory-map",
+      "contact": "fixtures@example.com",
+      "metadata": {
+        "owner": "Tests"
+      },
+      "taxonomy": {
+        "category": "tools",
+        "subcategory": "search",
+        "tags": ["fixture", "search"],
+        "facets": {
+          "audience": ["engineering"],
+          "maturity": ["experimental"],
+          "availability": ["internal"]
+        },
+        "synonyms": ["test search map"],
+        "relatedTerms": ["import"],
+        "aliases": ["Fixture Map"]
+      }
+    }
+  ]
+}

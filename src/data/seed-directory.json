@@ -1,0 +1,406 @@
+{
+  "taxonomy": {
+    "categories": [
+      {
+        "category": "people",
+        "subcategories": ["consultants", "reviewers", "operators"],
+        "description": "Individuals with reusable expertise or ownership responsibilities."
+      },
+      {
+        "category": "companies",
+        "subcategories": ["analytics", "logistics", "platforms"],
+        "description": "Organizations, customers, or partners."
+      },
+      {
+        "category": "services",
+        "subcategories": ["implementation", "discovery", "migration"],
+        "description": "Repeatable offerings or internal service lines."
+      },
+      {
+        "category": "documents",
+        "subcategories": ["guides", "playbooks", "benchmarks"],
+        "description": "Reference material that answers common questions."
+      },
+      {
+        "category": "tools",
+        "subcategories": ["search", "evaluation", "operations"],
+        "description": "Software tools and reusable assets."
+      },
+      {
+        "category": "vendors",
+        "subcategories": ["support", "legal", "data"],
+        "description": "Approved or candidate suppliers."
+      }
+    ],
+    "facets": {
+      "audience": ["engineering", "operations", "procurement", "leadership", "legal"],
+      "maturity": ["experimental", "pilot", "production"],
+      "availability": ["internal", "public", "partner"]
+    },
+    "synonyms": {
+      "ai": ["artificial intelligence", "llm", "language model", "agent"],
+      "search": ["discovery", "lookup", "retrieval"],
+      "vendor": ["supplier", "approved supplier"],
+      "document": ["guide", "playbook", "reference"],
+      "security": ["risk", "review", "compliance"],
+      "taxonomy": ["classification", "facets", "controlled vocabulary"],
+      "local": ["offline", "on-device", "no cloud"]
+    },
+    "relatedTerms": {
+      "procurement": ["vendor", "security", "legal"],
+      "evaluation": ["benchmark", "quality", "metrics"],
+      "migration": ["cloud", "implementation", "operations"],
+      "directory": ["taxonomy", "search", "entries"]
+    }
+  },
+  "entries": [
+    {
+      "id": "person-ava-chen",
+      "name": "Ava Chen",
+      "description": "AI search consultant who helps teams design local-first retrieval workflows, taxonomy governance, and grounded agent responses.",
+      "category": "people",
+      "tags": ["ai", "search", "taxonomy", "agent"],
+      "location": "London, UK",
+      "url": "https://example.com/people/ava-chen",
+      "contact": "ava.chen@example.com",
+      "taxonomy": {
+        "category": "people",
+        "subcategory": "consultants",
+        "tags": ["ai", "search", "taxonomy", "agent"],
+        "facets": {
+          "audience": ["engineering", "leadership"],
+          "maturity": ["production"],
+          "availability": ["partner"]
+        },
+        "synonyms": ["retrieval consultant", "agent search advisor"],
+        "relatedTerms": ["evaluation", "directory"],
+        "aliases": ["A. Chen", "Ava C."]
+      },
+      "metadata": {
+        "role": "Independent consultant",
+        "priority": "high"
+      },
+      "createdAt": "2026-01-04T09:00:00.000Z",
+      "updatedAt": "2026-05-11T10:30:00.000Z"
+    },
+    {
+      "id": "company-northstar-analytics",
+      "name": "Northstar Analytics",
+      "description": "Analytics company specializing in business intelligence dashboards, data quality monitoring, and operations reporting.",
+      "category": "companies",
+      "tags": ["analytics", "data", "dashboards", "operations"],
+      "location": "New York, US",
+      "url": "https://example.com/companies/northstar-analytics",
+      "contact": "hello@northstar.example",
+      "taxonomy": {
+        "category": "companies",
+        "subcategory": "analytics",
+        "tags": ["analytics", "data", "dashboards", "operations"],
+        "facets": {
+          "audience": ["operations", "leadership"],
+          "maturity": ["production"],
+          "availability": ["partner"]
+        },
+        "synonyms": ["bi partner", "reporting company"],
+        "relatedTerms": ["evaluation", "metrics"],
+        "aliases": ["Northstar BI"]
+      },
+      "metadata": {
+        "accountOwner": "Sales Ops",
+        "tier": "preferred"
+      },
+      "createdAt": "2025-11-15T12:00:00.000Z",
+      "updatedAt": "2026-04-22T15:20:00.000Z"
+    },
+    {
+      "id": "service-civic-cloud-migration",
+      "name": "Civic Cloud Migration",
+      "description": "Implementation service for public-sector teams moving document search and workflow systems from legacy hosting into managed cloud environments.",
+      "category": "services",
+      "tags": ["cloud", "migration", "public-sector", "implementation"],
+      "location": "Remote",
+      "url": "https://example.com/services/civic-cloud-migration",
+      "contact": "services@example.com",
+      "taxonomy": {
+        "category": "services",
+        "subcategory": "migration",
+        "tags": ["cloud", "migration", "public-sector", "implementation"],
+        "facets": {
+          "audience": ["operations", "engineering"],
+          "maturity": ["production"],
+          "availability": ["internal"]
+        },
+        "synonyms": ["government migration", "legacy modernization"],
+        "relatedTerms": ["security", "procurement"],
+        "aliases": ["CCM"]
+      },
+      "metadata": {
+        "deliveryWindow": "6-10 weeks",
+        "owner": "Platform Services"
+      },
+      "createdAt": "2025-10-02T08:45:00.000Z",
+      "updatedAt": "2026-03-02T09:15:00.000Z"
+    },
+    {
+      "id": "document-responsible-ai-procurement",
+      "name": "Responsible AI Procurement Guide",
+      "description": "A guide for evaluating AI vendors, reviewing security posture, documenting model risk, and requiring grounded outputs in procurement decisions.",
+      "category": "documents",
+      "tags": ["ai", "procurement", "security", "vendor"],
+      "location": "Knowledge Base",
+      "url": "https://example.com/docs/responsible-ai-procurement",
+      "contact": "kb@example.com",
+      "taxonomy": {
+        "category": "documents",
+        "subcategory": "guides",
+        "tags": ["ai", "procurement", "security", "vendor"],
+        "facets": {
+          "audience": ["procurement", "legal", "leadership"],
+          "maturity": ["production"],
+          "availability": ["internal"]
+        },
+        "synonyms": ["ai supplier checklist", "vendor risk guide"],
+        "relatedTerms": ["compliance", "evaluation"],
+        "aliases": ["AI Procurement Guide"]
+      },
+      "metadata": {
+        "version": "1.4",
+        "owner": "Risk Office"
+      },
+      "createdAt": "2025-09-01T14:00:00.000Z",
+      "updatedAt": "2026-06-05T11:00:00.000Z"
+    },
+    {
+      "id": "tool-atlas-vector-toolkit",
+      "name": "Atlas Vector Toolkit",
+      "description": "No-cost local toolkit for experimenting with embeddings, vector-like similarity, search evals, and recall diagnostics before buying managed infrastructure.",
+      "category": "tools",
+      "tags": ["search", "evaluation", "local", "embeddings"],
+      "location": "Git repository",
+      "url": "https://example.com/tools/atlas-vector-toolkit",
+      "contact": "devtools@example.com",
+      "taxonomy": {
+        "category": "tools",
+        "subcategory": "search",
+        "tags": ["search", "evaluation", "local", "embeddings"],
+        "facets": {
+          "audience": ["engineering"],
+          "maturity": ["pilot"],
+          "availability": ["internal"]
+        },
+        "synonyms": ["vector sandbox", "embedding toolkit"],
+        "relatedTerms": ["metrics", "retrieval"],
+        "aliases": ["Atlas"]
+      },
+      "metadata": {
+        "language": "JavaScript",
+        "license": "MIT"
+      },
+      "createdAt": "2026-02-12T09:30:00.000Z",
+      "updatedAt": "2026-05-30T16:40:00.000Z"
+    },
+    {
+      "id": "vendor-opendesk-support",
+      "name": "OpenDesk Support",
+      "description": "Support vendor for help desk operations, knowledge-base triage, and searchable ticket history migration.",
+      "category": "vendors",
+      "tags": ["support", "helpdesk", "operations", "vendor"],
+      "location": "Austin, US",
+      "url": "https://example.com/vendors/opendesk-support",
+      "contact": "procurement@opendesk.example",
+      "taxonomy": {
+        "category": "vendors",
+        "subcategory": "support",
+        "tags": ["support", "helpdesk", "operations", "vendor"],
+        "facets": {
+          "audience": ["operations", "procurement"],
+          "maturity": ["production"],
+          "availability": ["partner"]
+        },
+        "synonyms": ["service desk supplier", "support provider"],
+        "relatedTerms": ["ticket migration", "knowledge base"],
+        "aliases": ["OpenDesk"]
+      },
+      "metadata": {
+        "riskStatus": "approved",
+        "contractRenewal": "2026-10-01"
+      },
+      "createdAt": "2025-12-08T10:10:00.000Z",
+      "updatedAt": "2026-04-18T10:45:00.000Z"
+    },
+    {
+      "id": "company-greengrid-logistics",
+      "name": "GreenGrid Logistics",
+      "description": "Logistics company using route optimization, sustainability reporting, and supplier performance data for regional delivery networks.",
+      "category": "companies",
+      "tags": ["logistics", "sustainability", "data", "supplier"],
+      "location": "Bristol, UK",
+      "url": "https://example.com/companies/greengrid-logistics",
+      "contact": "partners@greengrid.example",
+      "taxonomy": {
+        "category": "companies",
+        "subcategory": "logistics",
+        "tags": ["logistics", "sustainability", "data", "supplier"],
+        "facets": {
+          "audience": ["operations", "procurement"],
+          "maturity": ["pilot"],
+          "availability": ["partner"]
+        },
+        "synonyms": ["green delivery partner", "route optimization company"],
+        "relatedTerms": ["vendor", "analytics"],
+        "aliases": ["GreenGrid"]
+      },
+      "metadata": {
+        "region": "UK",
+        "tier": "candidate"
+      },
+      "createdAt": "2026-02-20T11:15:00.000Z",
+      "updatedAt": "2026-05-16T12:00:00.000Z"
+    },
+    {
+      "id": "person-sam-rivera",
+      "name": "Sam Rivera",
+      "description": "Security reviewer for vendor risk, AI model documentation, privacy questionnaires, and procurement approvals.",
+      "category": "people",
+      "tags": ["security", "vendor", "procurement", "privacy", "reviewer"],
+      "location": "Chicago, US",
+      "url": "https://example.com/people/sam-rivera",
+      "contact": "sam.rivera@example.com",
+      "taxonomy": {
+        "category": "people",
+        "subcategory": "reviewers",
+        "tags": ["security", "vendor", "procurement", "privacy", "reviewer"],
+        "facets": {
+          "audience": ["procurement", "legal"],
+          "maturity": ["production"],
+          "availability": ["internal"]
+        },
+        "synonyms": ["risk reviewer", "security approver"],
+        "relatedTerms": ["responsible ai", "compliance"],
+        "aliases": ["S. Rivera"]
+      },
+      "metadata": {
+        "team": "Security",
+        "sla": "3 business days"
+      },
+      "createdAt": "2025-08-14T08:20:00.000Z",
+      "updatedAt": "2026-06-10T08:20:00.000Z"
+    },
+    {
+      "id": "document-taxonomy-governance-playbook",
+      "name": "Taxonomy Governance Playbook",
+      "description": "Playbook defining category ownership, tag review rules, synonym curation, facet quality checks, and search relevance evaluation.",
+      "category": "documents",
+      "tags": ["taxonomy", "governance", "search", "evaluation"],
+      "location": "Knowledge Base",
+      "url": "https://example.com/docs/taxonomy-governance-playbook",
+      "contact": "kb@example.com",
+      "taxonomy": {
+        "category": "documents",
+        "subcategory": "playbooks",
+        "tags": ["taxonomy", "governance", "search", "evaluation"],
+        "facets": {
+          "audience": ["engineering", "operations"],
+          "maturity": ["production"],
+          "availability": ["internal"]
+        },
+        "synonyms": ["classification guide", "facet governance"],
+        "relatedTerms": ["directory", "quality"],
+        "aliases": ["Taxonomy Playbook"]
+      },
+      "metadata": {
+        "version": "2.0",
+        "owner": "Information Architecture"
+      },
+      "createdAt": "2025-07-18T13:00:00.000Z",
+      "updatedAt": "2026-06-01T14:00:00.000Z"
+    },
+    {
+      "id": "tool-local-index-benchmark",
+      "name": "Local Index Benchmark",
+      "description": "Evaluation tool that measures top-k accuracy, mean reciprocal rank, latency, empty-result rate, and grounded answer coverage for local search.",
+      "category": "tools",
+      "tags": ["evaluation", "search", "metrics", "local"],
+      "location": "Git repository",
+      "url": "https://example.com/tools/local-index-benchmark",
+      "contact": "devtools@example.com",
+      "taxonomy": {
+        "category": "tools",
+        "subcategory": "evaluation",
+        "tags": ["evaluation", "search", "metrics", "local"],
+        "facets": {
+          "audience": ["engineering", "leadership"],
+          "maturity": ["production"],
+          "availability": ["internal"]
+        },
+        "synonyms": ["search eval harness", "retrieval metrics"],
+        "relatedTerms": ["benchmark", "quality"],
+        "aliases": ["Index Benchmark"]
+      },
+      "metadata": {
+        "language": "JavaScript",
+        "owner": "Search Platform"
+      },
+      "createdAt": "2026-01-28T10:00:00.000Z",
+      "updatedAt": "2026-06-08T17:30:00.000Z"
+    },
+    {
+      "id": "service-supplier-discovery-sprint",
+      "name": "Supplier Discovery Sprint",
+      "description": "Two-week service that maps vendor needs, screens candidate suppliers, aligns taxonomy tags, and prepares grounded comparison notes.",
+      "category": "services",
+      "tags": ["vendor", "supplier", "procurement", "discovery"],
+      "location": "Remote",
+      "url": "https://example.com/services/supplier-discovery-sprint",
+      "contact": "services@example.com",
+      "taxonomy": {
+        "category": "services",
+        "subcategory": "discovery",
+        "tags": ["vendor", "supplier", "procurement", "discovery"],
+        "facets": {
+          "audience": ["procurement", "leadership"],
+          "maturity": ["pilot"],
+          "availability": ["internal"]
+        },
+        "synonyms": ["vendor shortlist sprint", "supplier search"],
+        "relatedTerms": ["legal", "security"],
+        "aliases": ["SDS"]
+      },
+      "metadata": {
+        "deliveryWindow": "2 weeks",
+        "owner": "Procurement Ops"
+      },
+      "createdAt": "2026-03-06T09:00:00.000Z",
+      "updatedAt": "2026-05-25T09:30:00.000Z"
+    },
+    {
+      "id": "vendor-harbor-legal-ops",
+      "name": "Harbor Legal Ops",
+      "description": "Legal operations vendor for contract review workflows, procurement clauses, and compliance evidence management.",
+      "category": "vendors",
+      "tags": ["legal", "procurement", "contracts", "compliance"],
+      "location": "San Francisco, US",
+      "url": "https://example.com/vendors/harbor-legal-ops",
+      "contact": "intake@harborlegal.example",
+      "taxonomy": {
+        "category": "vendors",
+        "subcategory": "legal",
+        "tags": ["legal", "procurement", "contracts", "compliance"],
+        "facets": {
+          "audience": ["legal", "procurement"],
+          "maturity": ["production"],
+          "availability": ["partner"]
+        },
+        "synonyms": ["contract review provider", "legal supplier"],
+        "relatedTerms": ["vendor risk", "security"],
+        "aliases": ["Harbor Legal"]
+      },
+      "metadata": {
+        "riskStatus": "approved",
+        "contractRenewal": "2027-01-15"
+      },
+      "createdAt": "2025-06-11T09:00:00.000Z",
+      "updatedAt": "2026-02-19T09:00:00.000Z"
+    }
+  ]
+}

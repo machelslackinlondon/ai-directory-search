@@ -1,0 +1,289 @@
+Build a lightweight AI agent-powered directory search app.
+
+The app should let users search a directory of people, companies, services, documents, tools, vendors, or other structured entries using both normal keyword search and an AI-assisted natural-language search experience.
+
+Use freemium or no-cost services where possible. The app must work locally with no paid services required. If external freemium services are useful, make them optional behind environment variables and provide an in-app memory or local index fallback.
+
+You decide whether this should be a single project or a monorepo. Prefer a single project for simplicity unless a separate MCP server, shared packages, or deployment boundary makes a monorepo cleaner. Explain the decision in the README.
+
+Core requirements:
+
+1. User-facing app
+   - Build a clean web UI for searching the directory.
+   - Include:
+     - Search input
+     - Filters
+     - Sort controls
+     - Result cards/list
+     - Detail view
+     - "Why this matched" explanation
+     - Empty, loading, and error states
+     - Admin/import page for sample data
+   - The first screen should be the usable search experience, not a marketing landing page.
+
+2. Directory data model
+   - Support flexible directory entries with fields such as:
+     - id
+     - name
+     - description
+     - category
+     - tags
+     - location
+     - url
+     - contact
+     - metadata
+     - createdAt
+     - updatedAt
+   - Include seed data so the app is usable immediately.
+   - Support importing JSON or CSV if reasonable for the chosen stack.
+   - taxonomy: {
+  category,
+  subcategory,
+  tags,
+  facets,
+  synonyms,
+  relatedTerms,
+  aliases
+}
+
+3. Search and indexing
+   - Implement a local default index that works without external services.
+   - Use keyword/full-text search as the baseline.
+   - Add optional semantic search if an embedding provider or freemium vector service is configured.
+   - If no AI provider is configured, the app should still work with deterministic keyword search.
+   - Design the index behind an adapter interface so implementations can be swapped.
+
+   Suggested index modes:
+   - `memory`: in-app memory index for local/dev use.
+   - `sqlite` or local file index if appropriate.
+   - Optional freemium vector/search provider adapter if credentials are supplied.
+   - Optional embedding adapter if an AI provider key is supplied.
+
+4. Lightweight AI agent
+   - Create a small server-side agent runtime that can answer directory search questions.
+   - The agent should:
+     - Interpret the user query.
+     - Decide whether to use keyword search, semantic search, filters, or entry lookup.
+     - Call search tools.
+     - Summarize results.
+     - Explain why results were selected.
+     - Refuse to invent directory entries that do not exist.
+   - Keep the agent simple and understandable. Do not over-engineer a complex multi-agent framework unless needed.
+   - If an LLM provider is unavailable, provide a deterministic fallback response.
+
+5. MCP support
+   - Include an MCP server if practical for the chosen architecture.
+   - If a real MCP server is not practical, implement a mock MCP-compatible layer with the same tool contracts.
+   - The MCP server or mock MCP server should expose tools such as:
+     - `search_directory`
+     - `get_directory_entry`
+     - `list_directory_categories`
+     - `upsert_directory_entry`
+     - `delete_directory_entry` only if guarded/admin-only
+     - `reindex_directory`
+     - `get_index_stats`
+   - Include clear schemas for tool inputs and outputs.
+   - The app should be able to use the same search logic through normal API routes and through the MCP tool layer.
+   - Add tests for MCP tool behavior or mock MCP tool behavior.
+
+6. Guardrails
+   - The AI must not fabricate entries.
+   - Every generated answer should be grounded in returned directory records.
+   - Include result IDs or references in AI responses.
+   - Mutating operations such as upsert, delete, or reindex must be admin-only or clearly guarded.
+   - Do not log secrets.
+   - Keep user data handling simple and documented.
+   - If using external services, fail gracefully when credentials are missing.
+
+7. Deployment
+   - Make the app deployable.
+   - Include one recommended low-cost/free deployment path.
+   - Include a Dockerfile if it fits the stack.
+   - Include `.env.example`.
+   - Include setup scripts.
+   - The default local setup should be simple:
+     - install dependencies
+     - run seed/index command
+     - start dev server
+     - run tests
+
+8. Testing
+   - Add unit tests for:
+     - directory data validation
+     - search adapter behavior
+     - ranking logic
+     - filter logic
+     - agent fallback behavior
+     - MCP/mock MCP tool schemas
+   - Add integration tests for:
+     - search API
+     - agent query API
+     - import/index flow
+     - MCP/mock MCP tool calls
+   - Add at least one end-to-end or UI test for:
+     - user searches
+     - results render
+     - detail view opens
+     - no-result state appears
+   - Include test fixtures.
+
+9. Evaluation
+   - Add an evaluation harness to measure search and agent effectiveness.
+   - Include a file such as `evals/queries.json` with sample queries and expected result IDs.
+   - Compute useful metrics such as:
+     - top-1 accuracy
+     - top-3 accuracy
+     - precision@k
+     - recall@k
+     - mean reciprocal rank
+     - latency
+     - empty result rate
+     - grounded-answer rate
+   - Add a command such as `npm run eval` or equivalent.
+   - Include documentation explaining how to add new evaluation cases.
+   - The evaluation should work without paid services.
+
+10. Documentation
+   - Create clear documentation:
+     - README
+     - Architecture overview
+     - Usage guide
+     - Onboarding guide
+     - Environment variables
+     - Deployment guide
+     - Testing guide
+     - Evaluation guide
+     - MCP server or mock MCP guide
+   - Explain what problem the app solves:
+     - finding relevant entries in a directory
+     - reducing manual browsing
+     - supporting natural-language search
+     - enabling AI tools to query the directory through MCP
+     - giving users transparent ranked results
+   - Explain the architecture:
+     - UI
+     - API routes/server
+     - agent runtime
+     - search/index adapter
+     - MCP server or mock MCP layer
+     - storage/index choice
+     - optional external services
+   - Explain how to onboard a new developer:
+     - prerequisites
+     - install
+     - configure env
+     - seed data
+     - run app
+     - run tests
+     - run evals
+     - add a new directory field
+     - add a new search provider
+     - add a new MCP tool
+  - Taxonomy guide:
+    - category/tag/facet definitions
+    - examples
+    - governance rules
+    - how taxonomy improves search
+    - how to evaluate taxonomy quality   
+
+11. Suggested architecture
+
+   If using a single project, use a structure like:
+
+   src/
+     app/ or pages/
+     components/
+     server/
+       agent/
+       search/
+       directory/
+       mcp/
+       evals/
+     data/
+     tests/
+   docs/
+     architecture.md
+     onboarding.md
+     usage.md
+     evaluation.md
+
+   If using a monorepo, use a structure like:
+
+   apps/
+     web/
+     mcp-server/
+   packages/
+     core/
+     search/
+     evals/
+   docs/
+
+   Choose the structure that keeps the app easiest to run, test, and understand.
+
+12. Acceptance criteria
+   - A user can run the app locally.
+   - A user can search the seeded directory from the UI.
+   - A user can ask a natural-language query and receive grounded results.
+   - The app works without paid services.
+   - Optional freemium/external services are clearly documented and disabled by default.
+   - MCP tools or mock MCP tools are implemented and tested.
+   - Tests pass.
+   - Evaluation command runs and prints metrics.
+   - Documentation explains architecture, usage, onboarding, deployment, and effectiveness evaluation.
+
+13. Taxonomy explanation and management
+
+Add a clear taxonomy model for the directory.
+
+The taxonomy should explain how entries are organized, classified, filtered, and discovered. It should help both users and the AI agent understand the meaning of categories, tags, facets, and relationships.
+
+Include taxonomy concepts such as:
+- `category`: primary grouping, such as People, Companies, Services, Tools, Vendors, Documents, or Teams.
+- `subcategory`: optional narrower grouping under a category.
+- `tags`: flexible descriptive labels for search and filtering.
+- `facets`: structured filter dimensions such as location, industry, role, pricing tier, status, language, capability, or availability.
+- `synonyms`: alternate terms users may search for.
+- `relatedTerms`: connected concepts that improve discovery.
+- `aliases`: alternate names for an entry.
+- `metadata`: flexible custom fields for domain-specific attributes.
+
+The app should include:
+- A default taxonomy seed file.
+- Documentation explaining the taxonomy.
+- UI filters based on taxonomy fields.
+- Search ranking that uses taxonomy matches.
+- AI explanations that mention taxonomy matches, such as “matched because this entry is tagged `analytics` and belongs to the `Data Tools` category.”
+- A simple admin/import flow for adding or editing taxonomy fields.
+- Validation to prevent messy taxonomy data, such as duplicate categories with different casing.
+
+Taxonomy documentation should explain:
+- What each taxonomy field means.
+- When to use a category versus a tag.
+- How facets differ from tags.
+- How synonyms improve natural-language search.
+- How to add a new category.
+- How to rename or merge categories safely.
+- How taxonomy affects search ranking and AI answers.
+
+Add taxonomy evaluation checks:
+- Measure whether expected categories appear in top results.
+- Track queries that return no results due to missing synonyms.
+- Track overused tags.
+- Track duplicate or near-duplicate categories.
+- Track entries missing required taxonomy fields.
+
+Guardrails:
+- The AI agent must not invent taxonomy categories unless the user is in an admin flow and explicitly asks to create them.
+- If a user searches with a term that maps to a synonym, the app should explain the mapping.
+- If taxonomy is uncertain, show “possible category” or “possible tag” instead of presenting guesses as facts.
+
+Implementation guidance:
+- Keep the stack lightweight.
+- Prefer TypeScript if starting from scratch.
+- Prefer simple, readable code over clever abstractions.
+- Use adapters for replaceable services.
+- Keep the initial app small but complete.
+- Do not require paid APIs for the default experience.
+- Do not hardcode secrets.
+- Include clear comments only where they help.
+- After implementation, run tests and provide the local dev URL or deployment instructions.

@@ -1,0 +1,2 @@
+id,name,description,category,tags,location,url,contact
+vendor-fixture-csv,Fixture CSV Vendor,Vendor imported from a CSV fixture for integration checks,vendors,"fixture|csv|vendor",Test suite,https://example.com/fixtures/csv,vendor@example.com
