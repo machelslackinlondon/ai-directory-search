@@ -1,5 +1,6 @@
 require("dotenv").config({ quiet: true });
 const { createAppServer } = require("./http");
+const { createShutdownHandler } = require("./lifecycle");
 const { formatStartupSearchStats } = require("./search/searchStats");
 
 const port = Number(process.env.PORT) || 3000;
@@ -16,14 +17,7 @@ server.listen(port, host, async () => {
   }
 });
 
-function shutdown(signal) {
-  server.close((error) => {
-    if (!error) return;
-    process.exitCode = 1;
-    const failureCount = Number.isInteger(error.failureCount) ? ` (${error.failureCount} adapter failure${error.failureCount === 1 ? "" : "s"})` : "";
-    console.error(`Graceful shutdown failed after ${signal}: ${error.code || "SERVER_CLOSE_FAILED"}${failureCount}`);
-  });
-}
+const shutdown = createShutdownHandler(server);
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
