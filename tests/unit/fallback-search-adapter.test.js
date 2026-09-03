@@ -247,6 +247,29 @@ test("composition defaults to fallback OpenSearch and permits explicit memory te
   assert.throws(() => createSearchAdapter(store, { backend: "unsupported", memoryAdapter: memory }), /Unsupported SEARCH_BACKEND/);
 });
 
+test("composition treats an empty fallback cooldown environment value as the 30 second default", async (t) => {
+  const previousCooldown = process.env.OPENSEARCH_FALLBACK_COOLDOWN_MS;
+  t.after(() => {
+    if (previousCooldown === undefined) delete process.env.OPENSEARCH_FALLBACK_COOLDOWN_MS;
+    else process.env.OPENSEARCH_FALLBACK_COOLDOWN_MS = previousCooldown;
+  });
+  process.env.OPENSEARCH_FALLBACK_COOLDOWN_MS = "";
+  const store = createMemoryDirectoryStore({ entries: [] });
+  const primary = makeAdapter({
+    async search() { throw Object.assign(new Error("unavailable"), { code: "ECONNREFUSED" }); }
+  });
+  const adapter = createSearchAdapter(store, {
+    memoryAdapter: makeAdapter(),
+    openSearchAdapter: primary,
+    now: () => 1_000
+  });
+
+  await adapter.search({ query: "cooldown" });
+  const stats = await adapter.stats();
+
+  assert.deepEqual(stats.cooldown, { active: true, unavailableUntil: 31_000, remainingMs: 30_000 });
+});
+
 test("closing a fallback adapter closes each distinct adapter once", async () => {
   let primaryClosed = 0;
   let memoryClosed = 0;

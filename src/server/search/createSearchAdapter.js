@@ -12,7 +12,10 @@ function createSearchAdapter(store, options = {}) {
     client: options.openSearchClient,
     ...options.openSearchOptions
   });
-  const configuredCooldown = Number(process.env.OPENSEARCH_FALLBACK_COOLDOWN_MS);
+  const cooldownInput = process.env.OPENSEARCH_FALLBACK_COOLDOWN_MS;
+  const configuredCooldown = cooldownInput === undefined || cooldownInput.trim() === ""
+    ? Number.NaN
+    : Number(cooldownInput);
   return createFallbackSearchAdapter(primary, memory, {
     cooldownMs: options.cooldownMs ?? (Number.isFinite(configuredCooldown) ? configuredCooldown : 30_000),
     now: options.now

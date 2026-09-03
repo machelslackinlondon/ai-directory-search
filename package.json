@@ -14,7 +14,16 @@
     "index": "node scripts/index.js",
     "test": "node scripts/run-tests.js",
     "eval": "node src/server/evals/runEvaluation.js",
-    "mcp": "node scripts/mcp-cli.js"
+    "mcp": "node scripts/mcp-cli.js",
+    "opensearch:up": "docker compose config --quiet && docker compose up -d opensearch opensearch-dashboards",
+    "opensearch:down": "docker compose down",
+    "opensearch:logs": "docker compose logs -f opensearch opensearch-dashboards",
+    "opensearch:wait": "node scripts/opensearch.js wait",
+    "opensearch:bootstrap": "node scripts/opensearch.js bootstrap",
+    "opensearch:reindex": "node scripts/opensearch.js reindex",
+    "opensearch:verify": "node scripts/opensearch.js verify",
+    "opensearch:test": "OPENSEARCH_LIVE_TEST=1 node --test tests/integration/opensearch-live.test.js",
+    "setup:opensearch": "npm run opensearch:up && npm run opensearch:wait && npm run opensearch:bootstrap && npm run seed && npm run opensearch:reindex && npm run opensearch:verify"
   },
   "keywords": [
     "directory",

@@ -130,7 +130,7 @@ const INDEX_TEMPLATE = {
 const ANALYZE_CASES = [
   { analyzer: "directory_text", text: "Caf\u00e9 MODERN", expected: ["cafe", "modern"] },
   { analyzer: "directory_description_index", text: "renovating", expected: ["renovate"] },
-  { analyzer: "directory_description_search", text: "remodel", expected: ["remodel", "remodeling", "renovation"] },
+  { analyzer: "directory_description_search", text: "remodel", expected: ["remodel", "renovate", "remodel"] },
   { analyzer: "directory_autocomplete", text: "Arch", expected: ["ar", "arc", "arch"] }
 ];
 

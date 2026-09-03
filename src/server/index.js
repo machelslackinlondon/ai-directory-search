@@ -1,3 +1,4 @@
+require("dotenv").config({ quiet: true });
 const { createAppServer } = require("./http");
 
 const port = Number(process.env.PORT) || 3000;
