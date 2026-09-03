@@ -1,4 +1,5 @@
 const fs = require("fs");
+const { spawnSync } = require("child_process");
 const test = require("node:test");
 const assert = require("assert/strict");
 
@@ -19,9 +20,28 @@ test("compose persists data and publishes local services only on loopback", () =
   assert.match(compose, /127\.0\.0\.1:9600:9600/);
   assert.match(compose, /127\.0\.0\.1:5601:5601/);
   assert.match(compose, /opensearch-data:\/usr\/share\/opensearch\/data/);
-  assert.match(compose, /curl -fk -u admin:\$\$\{OPENSEARCH_INITIAL_ADMIN_PASSWORD\}/);
+  assert.match(compose, /curl -fk -u \\"admin:\$\$\{OPENSEARCH_INITIAL_ADMIN_PASSWORD\}\\"/);
   assert.match(compose, /condition: service_healthy/);
   assert.doesNotMatch(compose, /docker\.io\/library|latest/);
+});
+
+test("secured health commands quote credentials and whitelist meaningful Dashboards readiness codes", () => {
+  const compose = fs.readFileSync("compose.yml", "utf8");
+  const healthCommands = [...compose.matchAll(/test: \["CMD-SHELL", "([^"]*(?:\\"[^"]*)*)"\]/g)]
+    .map((match) => match[1]);
+  assert.equal(healthCommands.length, 2);
+  assert.match(healthCommands[0], /-u \\"admin:\$\$\{OPENSEARCH_INITIAL_ADMIN_PASSWORD\}\\"/);
+  assert.match(healthCommands[1], /%\{http_code\}/);
+  assert.match(healthCommands[1], /200/);
+  assert.match(healthCommands[1], /401/);
+  assert.doesNotMatch(healthCommands[1], /curl -sS -o \/dev\/null http:\/\/localhost:5601/);
+
+  const renderedDashboardCommand = healthCommands[1].replaceAll('\\"', '"').replaceAll("$$", "$");
+  const statusGate = renderedDashboardCommand.slice(renderedDashboardCommand.indexOf("case "));
+  for (const [statusCode, expectedExit] of [[200, 0], [401, 0], [500, 1], [503, 1]]) {
+    const result = spawnSync("/bin/sh", ["-c", `status=${statusCode}; ${statusGate}`]);
+    assert.equal(result.status, expectedExit, `unexpected health result for HTTP ${statusCode}`);
+  }
 });
 
 test("operations commands validate Compose before startup and keep live tests opt-in", () => {

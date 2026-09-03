@@ -97,14 +97,23 @@ liveTest("search-time synonyms retrieve renovation profiles for remodeling", asy
   assert.ok(resultIds(result).includes(expectedId));
 });
 
-liveTest("indexed aliases retrieve the canonical Atelier profile", async () => {
-  const result = await adapter.search({ query: "Atelier North Architects" });
-  assert.equal(result.results[0].id, expectedId);
+liveTest("an alias-only query retrieves the canonical Civic Form profile", async () => {
+  const expectedAliasId = "civic-form-architects";
+  const result = await adapter.search({ query: "CFA Studio" });
+  assert.equal(result.results[0].id, expectedAliasId);
+
+  const aliasesOnly = bodyOf(await client.search({
+    index: physicalIndex,
+    body: { query: { match: { aliases: { query: "CFA Studio", operator: "and" } } } }
+  }));
+  assert.deepEqual(aliasesOnly.hits.hits.map(({ _id }) => _id), [expectedAliasId]);
 });
 
-liveTest("bounded fuzzy matching retrieves a one-edit Atelier misspelling", async () => {
-  const result = await adapter.search({ query: "Atellier North" });
-  assert.ok(resultIds(result).includes(expectedId));
+liveTest("bounded fuzzy matching accepts an in-bound typo and rejects an over-bound typo", async () => {
+  const inBound = await adapter.search({ query: "Axtelier" });
+  const overBound = await adapter.search({ query: "Axxxxlier" });
+  assert.deepEqual(resultIds(inBound), [expectedId]);
+  assert.equal(overBound.total, 0);
 });
 
 liveTest("name and alias edge n-grams autocomplete their partial prefixes", async () => {
