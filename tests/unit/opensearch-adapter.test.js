@@ -242,6 +242,42 @@ test("OpenSearch config accepts booleans and exact boolean strings only", async 
   await client.close();
 });
 
+test("createOpenSearchClient redacts constructor-facing URL, password, and CA values", () => {
+  const urlSentinel = "url-user-sentinel";
+  const passwordSentinel = "url-password-sentinel";
+  const caSentinel = "ca-path-sentinel";
+
+  for (const options of [
+    {
+      env: {
+        OPENSEARCH_NODE: `https://${urlSentinel}:${passwordSentinel}@[invalid`,
+        OPENSEARCH_USERNAME: "admin",
+        OPENSEARCH_PASSWORD: passwordSentinel
+      }
+    },
+    {
+      env: {
+        OPENSEARCH_NODE: "https://127.0.0.1:9200",
+        OPENSEARCH_USERNAME: "admin",
+        OPENSEARCH_PASSWORD: passwordSentinel,
+        OPENSEARCH_CA_PATH: `/tmp/${caSentinel}.pem`
+      }
+    }
+  ]) {
+    assert.throws(() => createOpenSearchClient(options), (error) => {
+      const serialized = serializedError(error);
+      assert.equal(error.code, "OPENSEARCH_CONFIG_INVALID");
+      assert.deepEqual(Object.keys(error), ["code"]);
+      assert.equal(Object.prototype.hasOwnProperty.call(error, "input"), false);
+      assert.equal(Object.prototype.hasOwnProperty.call(error, "cause"), false);
+      assert.equal(serialized.includes(urlSentinel), false);
+      assert.equal(serialized.includes(passwordSentinel), false);
+      assert.equal(serialized.includes(caSentinel), false);
+      return true;
+    });
+  }
+});
+
 test("bootstrap installs the template, checks every analyzer, then creates the first alias", async () => {
   const calls = [];
   const client = makeClientDouble(calls, { aliasExists: false });
@@ -612,6 +648,29 @@ test("waitForReady retries only recoverable availability errors", async () => {
 
   assert.equal((await adapter.waitForReady()).status, "green");
   assert.deepEqual(sleeps, [500]);
+});
+
+test("waitForReady treats official NoLivingConnectionsError names and types as recoverable", async (t) => {
+  for (const property of ["name", "type"]) {
+    await t.test(property, async () => {
+      let currentTime = 0;
+      const sleeps = [];
+      const noLivingConnections = new Error("all configured nodes are unavailable");
+      noLivingConnections[property] = "NoLivingConnectionsError";
+      const adapter = createOpenSearchSearchAdapter(store, {
+        client: makeClientDouble([], { healthOutcomes: [noLivingConnections, "yellow"] }),
+        now: () => new Date(currentTime),
+        readyTimeoutMs: 1000,
+        sleep: async (milliseconds) => {
+          sleeps.push(milliseconds);
+          currentTime += milliseconds;
+        }
+      });
+
+      assert.equal((await adapter.waitForReady()).status, "yellow");
+      assert.deepEqual(sleeps, [500]);
+    });
+  }
 });
 
 test("waitForReady immediately rejects safely normalized request and authorization failures", async (t) => {

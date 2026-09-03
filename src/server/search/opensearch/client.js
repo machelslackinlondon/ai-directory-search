@@ -21,6 +21,19 @@ function tlsBoolean(value) {
   throw configError("OpenSearch TLS verification must be true or false");
 }
 
+function validatedNode(value) {
+  try {
+    if (typeof value !== "string") throw new TypeError("node must be a string");
+    const parsed = new URL(value);
+    if (!["http:", "https:"].includes(parsed.protocol) || !parsed.hostname || parsed.username || parsed.password) {
+      throw new TypeError("unsupported node URL");
+    }
+    return value;
+  } catch {
+    throw configError("OpenSearch node URL is invalid");
+  }
+}
+
 function readOpenSearchConfig(env = process.env) {
   return {
     node: env.OPENSEARCH_NODE || "https://127.0.0.1:9200",
@@ -42,19 +55,24 @@ function createOpenSearchClient(options = {}) {
   const config = { ...readOpenSearchConfig(env), ...overrides };
   config.requestTimeout = positiveTimeout(config.requestTimeout);
   config.rejectUnauthorized = tlsBoolean(config.rejectUnauthorized);
+  config.node = validatedNode(config.node);
   if (config.username && !config.password) {
     throw configError("OpenSearch password is required when a username is configured");
   }
 
-  return new Client({
-    node: config.node,
-    auth: config.username ? { username: config.username, password: config.password } : undefined,
-    requestTimeout: config.requestTimeout,
-    ssl: {
-      rejectUnauthorized: config.rejectUnauthorized,
-      ...(config.caPath ? { ca: fs.readFileSync(config.caPath) } : {})
-    }
-  });
+  try {
+    return new Client({
+      node: config.node,
+      auth: config.username ? { username: config.username, password: config.password } : undefined,
+      requestTimeout: config.requestTimeout,
+      ssl: {
+        rejectUnauthorized: config.rejectUnauthorized,
+        ...(config.caPath ? { ca: fs.readFileSync(config.caPath) } : {})
+      }
+    });
+  } catch {
+    throw configError("OpenSearch client configuration is invalid");
+  }
 }
 
 module.exports = { createOpenSearchClient, readOpenSearchConfig };

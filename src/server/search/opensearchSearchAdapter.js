@@ -43,14 +43,15 @@ function normalizedErrorType(error) {
 function normalizeOpenSearchError(error) {
   if (error?.[SAFE_ERROR]) return error;
   const statusCode = Number(statusCodeOf(error)) || null;
-  const type = normalizedErrorType(error);
+  const isNoLivingConnections = error?.name === "NoLivingConnectionsError" || error?.type === "NoLivingConnectionsError";
+  const type = normalizedErrorType(error) || (isNoLivingConnections ? "NoLivingConnectionsError" : null);
   let code = "OPENSEARCH_REQUEST_FAILED";
   if (type === "alias_missing_exception") code = "OPENSEARCH_ALIAS_MISSING";
   else if (type === "index_not_found_exception") code = "OPENSEARCH_INDEX_MISSING";
   else if (statusCode === 401) code = "OPENSEARCH_AUTHENTICATION_FAILED";
   else if (statusCode === 403) code = "OPENSEARCH_AUTHORIZATION_FAILED";
   else if (statusCode === 400) code = "OPENSEARCH_BAD_REQUEST";
-  else if ([429, 502, 503, 504].includes(statusCode) || AVAILABILITY_CODES.has(error?.code) || ["ConnectionError", "TimeoutError"].includes(error?.name)) {
+  else if ([429, 502, 503, 504].includes(statusCode) || AVAILABILITY_CODES.has(error?.code) || ["ConnectionError", "TimeoutError", "NoLivingConnectionsError"].includes(error?.name) || isNoLivingConnections) {
     code = "OPENSEARCH_UNAVAILABLE";
   }
   const messages = {
