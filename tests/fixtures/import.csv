@@ -1,2 +1,2 @@
-id,name,description,category,tags,location,url,contact
-vendor-fixture-csv,Fixture CSV Vendor,Vendor imported from a CSV fixture for integration checks,vendors,"fixture|csv|vendor",Test suite,https://example.com/fixtures/csv,vendor@example.com
+id,name,description,category,businessType,state,city,rooms,projectTypes,styles,services,tags,url,contact
+fixture-landscape-csv,Fixture Landscape CSV,Landscape fixture imported from CSV for integration checks,Outdoor + Garden Design,Landscape Designer,Oregon,Portland,,Renovation,Eclectic,Consultation,"fixture|csv|garden",https://example.com/fixtures/csv,fixtures@example.com

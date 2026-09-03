@@ -5,36 +5,36 @@ const { entryMatchesFilters } = require("../../src/server/search/memorySearchAda
 
 test("keyword ranking places the most relevant entry first", () => {
   const { searchAdapter } = createTestContext();
-  const response = searchAdapter.search({ query: "AI vendor risk procurement guide", limit: 5 });
-  assert.equal(response.results[0].id, "document-responsible-ai-procurement");
+  const response = searchAdapter.search({ query: "modern residential architecture renovation", limit: 5 });
+  assert.equal(response.results[0].id, "atelier-north-architecture");
   assert.ok(response.results[0].whyMatched.includes("tags") || response.results[0].whyMatched.includes("description"));
 });
 
 test("filter logic narrows by category and tags", () => {
   const { searchAdapter } = createTestContext();
   const response = searchAdapter.search({
-    query: "search",
+    query: "modern residential",
     filters: {
-      category: "tools",
-      tags: ["local"]
+      category: "Architecture",
+      tags: ["residential"]
     }
   });
   assert.ok(response.results.length >= 1);
-  assert.ok(response.results.every((result) => result.entry.category === "tools"));
-  assert.ok(response.results.every((result) => result.entry.tags.includes("local")));
+  assert.ok(response.results.every((result) => result.entry.category === "Architecture"));
+  assert.ok(response.results.every((result) => result.entry.tags.includes("residential")));
 });
 
 test("entryMatchesFilters supports facets", () => {
   const { store } = createTestContext();
-  const entry = store.getEntry("document-responsible-ai-procurement");
+  const entry = store.getEntry("harbor-interiors");
   assert.equal(entryMatchesFilters(entry, {
     facets: {
-      audience: ["procurement"]
+      styles: ["Modern"]
     }
   }), true);
   assert.equal(entryMatchesFilters(entry, {
     facets: {
-      audience: ["engineering"]
+      styles: ["Traditional"]
     }
   }), false);
 });
@@ -43,16 +43,16 @@ test("sort controls produce deterministic name ordering", () => {
   const { searchAdapter } = createTestContext();
   const response = searchAdapter.search({ query: "", sort: "name", limit: 3 });
   assert.deepEqual(response.results.map((result) => result.entry.name), [
-    "Atlas Vector Toolkit",
-    "Ava Chen",
-    "Civic Cloud Migration"
+    "Atelier North Architecture",
+    "Civic Form Architects",
+    "Harbor Interiors"
   ]);
 });
 
 test("local semantic provider is optional and reports availability", () => {
   const { searchAdapter } = createTestContext({ searchOptions: { semanticProvider: "local-hash" } });
   const stats = searchAdapter.stats();
-  const response = searchAdapter.search({ query: "offline vector retrieval", mode: "hybrid" });
+  const response = searchAdapter.search({ query: "outdoor landscape design", mode: "hybrid" });
   assert.equal(stats.semanticEnabled, true);
   assert.equal(response.semanticAvailable, true);
   assert.ok(response.results.length > 0);

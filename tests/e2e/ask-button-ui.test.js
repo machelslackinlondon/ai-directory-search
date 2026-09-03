@@ -120,8 +120,8 @@ test("Ask button renders an inline grounded answer", async () => {
         return {
           ok: true,
           json: async () => ({
-            answer: "Responsible AI Procurement Guide can help with AI vendor risk.",
-            references: [{ id: "document-responsible-ai-procurement" }]
+            answer: "Hearth Kitchen Studio can help with traditional kitchen consultation.",
+            references: [{ id: "hearth-kitchen-studio" }]
           })
         };
       }
@@ -133,14 +133,14 @@ test("Ask button renders an inline grounded answer", async () => {
   await tick();
   await tick();
 
-  document.elements["#agent-input"].value = "who can help with ai vendor risk ?";
+  document.elements["#agent-input"].value = "who can help with traditional kitchen consultation ?";
   await document.elements["#agent-button"].dispatch("click");
 
   assert.ok(requests.some((request) => request.url === "/api/agent"));
   assert.ok(consoleMessages.some(([label, payload]) => label === "[directory] activity log" && Array.isArray(payload)));
   assert.ok(consoleMessages.some(([label, payload]) => label === "[directory] activity log" && payload.some((item) => item.action === "Ask completed")));
-  assert.match(document.elements["#agent-inline-answer"].innerHTML, /Responsible AI Procurement Guide/);
-  assert.match(document.elements["#agent-inline-answer"].innerHTML, /document-responsible-ai-procurement/);
+  assert.match(document.elements["#agent-inline-answer"].innerHTML, /Hearth Kitchen Studio/);
+  assert.match(document.elements["#agent-inline-answer"].innerHTML, /hearth-kitchen-studio/);
   assert.equal(document.elements["#agent-button"].disabled, false);
   assert.equal(document.elements["#agent-button"].textContent, "Ask");
 });

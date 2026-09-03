@@ -1,10 +1,24 @@
 const { asArray, slugify, unique } = require("../utils/text");
+const {
+  DESIGN_CATEGORIES,
+  DESIGN_FACETS,
+  US_STATES,
+  businessTypeBelongsToCategory,
+  canonicalizeControlledValue
+} = require("./designTaxonomy");
 
 const ENTRY_FIELDS = [
   "id",
   "name",
   "description",
   "category",
+  "businessType",
+  "state",
+  "city",
+  "rooms",
+  "projectTypes",
+  "styles",
+  "services",
   "tags",
   "location",
   "url",
@@ -47,6 +61,45 @@ function normalizeTaxonomyForEntry(entry) {
   };
 }
 
+function normalizeControlledArray(input, allowed, field, errors) {
+  return normalizeStringArray(input).map((value) => {
+    const canonical = canonicalizeControlledValue(allowed, value);
+    if (!canonical) errors.push(`${field} contains unsupported value: ${value}.`);
+    return canonical;
+  }).filter(Boolean);
+}
+
+function validateControlledFields(input, options = {}) {
+  const errors = [];
+  const taxonomy = isPlainObject(input.taxonomy) ? input.taxonomy : {};
+  const sourceCategory = input.category === undefined ? taxonomy.category : input.category;
+  const sourceBusinessType = input.businessType === undefined ? taxonomy.subcategory : input.businessType;
+  const hasCategory = sourceCategory !== undefined && sourceCategory !== "";
+  const hasBusinessType = sourceBusinessType !== undefined && sourceBusinessType !== "";
+  const hasState = input.state !== undefined && input.state !== "";
+  const category = hasCategory ? canonicalizeControlledValue(DESIGN_CATEGORIES.map((item) => item.category), sourceCategory) : "";
+  const businessType = hasBusinessType ? canonicalizeControlledValue(DESIGN_CATEGORIES.flatMap((item) => item.subcategories), sourceBusinessType) : "";
+
+  if (hasCategory && !category) errors.push(`category contains unsupported value: ${sourceCategory}.`);
+  if (hasBusinessType && !businessType) errors.push(`businessType contains unsupported value: ${sourceBusinessType}.`);
+  if (category && businessType && !businessTypeBelongsToCategory(category, businessType)) {
+    errors.push(`${businessType} does not belong to ${category}.`);
+  }
+  if (hasState && !canonicalizeControlledValue(US_STATES, input.state)) errors.push(`state contains unsupported value: ${input.state}.`);
+
+  Object.entries(DESIGN_FACETS).forEach(([field, allowed]) => {
+    const value = input[field] === undefined ? taxonomy.facets?.[field] : input[field];
+    if (value !== undefined) normalizeControlledArray(value, allowed, field, errors);
+  });
+
+  if (!options.partial) {
+    if (!hasBusinessType) errors.push("businessType is required.");
+    if (!hasState) errors.push("state is required.");
+  }
+
+  return errors;
+}
+
 function validateEntry(input, options = {}) {
   const errors = [];
   if (!isPlainObject(input)) {
@@ -74,6 +127,8 @@ function validateEntry(input, options = {}) {
     }
   });
 
+  if (errors.length === 0) errors.push(...validateControlledFields(input, options));
+
   return { ok: errors.length === 0, errors };
 }
 
@@ -86,13 +141,32 @@ function normalizeEntry(input) {
 
   const id = base.id || slugify(base.name || "entry");
   const tags = normalizeStringArray(base.tags);
+  const taxonomy = isPlainObject(base.taxonomy) ? base.taxonomy : {};
+  const category = canonicalizeControlledValue(DESIGN_CATEGORIES.map((item) => item.category), base.category || taxonomy.category);
+  const businessType = canonicalizeControlledValue(DESIGN_CATEGORIES.flatMap((item) => item.subcategories), base.businessType || taxonomy.subcategory);
+  const state = canonicalizeControlledValue(US_STATES, base.state);
+  const city = String(base.city || "").trim();
+  const errors = [];
+  const normalizedFacets = {
+    rooms: normalizeControlledArray(base.rooms || taxonomy.facets?.rooms, DESIGN_FACETS.rooms, "rooms", errors),
+    projectTypes: normalizeControlledArray(base.projectTypes || taxonomy.facets?.projectTypes, DESIGN_FACETS.projectTypes, "projectTypes", errors),
+    styles: normalizeControlledArray(base.styles || taxonomy.facets?.styles, DESIGN_FACETS.styles, "styles", errors),
+    services: normalizeControlledArray(base.services || taxonomy.facets?.services, DESIGN_FACETS.services, "services", errors)
+  };
   const normalized = {
     id,
     name: String(base.name || id),
     description: String(base.description || ""),
-    category: String(base.category || "uncategorized"),
+    category: category || String(base.category || taxonomy.category || "uncategorized"),
+    businessType,
+    state,
+    city,
+    rooms: normalizedFacets.rooms,
+    projectTypes: normalizedFacets.projectTypes,
+    styles: normalizedFacets.styles,
+    services: normalizedFacets.services,
     tags,
-    location: String(base.location || ""),
+    location: [city, state].filter(Boolean).join(", ") || String(base.location || ""),
     url: String(base.url || ""),
     contact: String(base.contact || ""),
     metadata: isPlainObject(base.metadata) ? base.metadata : {},
@@ -101,6 +175,9 @@ function normalizeEntry(input) {
   };
 
   normalized.taxonomy = normalizeTaxonomyForEntry({ ...normalized, taxonomy: base.taxonomy });
+  normalized.taxonomy.category = normalized.category;
+  normalized.taxonomy.subcategory = businessType || normalized.taxonomy.subcategory;
+  normalized.taxonomy.facets = { ...normalized.taxonomy.facets, ...normalizedFacets };
   normalized.category = normalized.taxonomy.category || normalized.category;
   normalized.tags = unique([...normalized.tags, ...normalized.taxonomy.tags]);
   normalized.taxonomy.tags = normalized.tags;

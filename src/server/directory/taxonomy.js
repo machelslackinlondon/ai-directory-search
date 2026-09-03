@@ -1,8 +1,9 @@
 const { normalizeText, tokenize, unique } = require("../utils/text");
 const { normalizeFacetMap, normalizeStringArray } = require("./schema");
+const { DESIGN_CATEGORIES, DESIGN_FACETS } = require("./designTaxonomy");
 
 function normalizeTaxonomy(taxonomy = {}) {
-  const categories = Array.isArray(taxonomy.categories)
+  const categories = (Array.isArray(taxonomy.categories) ? taxonomy.categories : DESIGN_CATEGORIES)
     ? taxonomy.categories.map((item) => ({
         category: item.category,
         subcategories: normalizeStringArray(item.subcategories),
@@ -22,7 +23,7 @@ function normalizeTaxonomy(taxonomy = {}) {
 
   return {
     categories,
-    facets: normalizeFacetMap(taxonomy.facets),
+    facets: normalizeFacetMap(Object.keys(taxonomy.facets || {}).length > 0 ? taxonomy.facets : DESIGN_FACETS),
     synonyms,
     relatedTerms
   };

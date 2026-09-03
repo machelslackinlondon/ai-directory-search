@@ -14,11 +14,11 @@ test("MCP tool schemas include required contracts", () => {
 
 test("MCP search and lookup tools share directory logic", async () => {
   const context = createTestContext();
-  const search = await callMcpTool("search_directory", { query: "taxonomy governance", limit: 2 }, context);
-  assert.equal(search.results[0].id, "document-taxonomy-governance-playbook");
+  const search = await callMcpTool("search_directory", { query: "traditional kitchen consultation", limit: 2 }, context);
+  assert.equal(search.results[0].id, "hearth-kitchen-studio");
 
   const entry = await callMcpTool("get_directory_entry", { id: search.results[0].id }, context);
-  assert.equal(entry.id, "document-taxonomy-governance-playbook");
+  assert.equal(entry.id, "hearth-kitchen-studio");
 });
 
 test("MCP mutating tools are admin guarded when ADMIN_TOKEN is set", async () => {
@@ -28,23 +28,27 @@ test("MCP mutating tools are admin guarded when ADMIN_TOKEN is set", async () =>
 
   await assert.rejects(() => callMcpTool("upsert_directory_entry", {
     entry: {
-      id: "tool-admin-test",
-      name: "Admin Test",
+      id: "admin-design-test",
+      name: "Admin Design Test",
       description: "Guarded write.",
-      category: "tools"
+      category: "Architecture",
+      businessType: "Residential Architect",
+      state: "California"
     }
   }, context), /Admin token/);
 
   const entry = await callMcpTool("upsert_directory_entry", {
     adminToken: "secret",
     entry: {
-      id: "tool-admin-test",
-      name: "Admin Test",
+      id: "admin-design-test",
+      name: "Admin Design Test",
       description: "Guarded write.",
-      category: "tools"
+      category: "Architecture",
+      businessType: "Residential Architect",
+      state: "California"
     }
   }, context);
-  assert.equal(entry.id, "tool-admin-test");
+  assert.equal(entry.id, "admin-design-test");
   process.env.ADMIN_TOKEN = original;
 });
 

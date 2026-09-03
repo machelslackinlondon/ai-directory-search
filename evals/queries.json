@@ -1,26 +1,7 @@
 [
-  {
-    "query": "AI vendor risk procurement guide",
-    "expectedIds": ["document-responsible-ai-procurement"]
-  },
-  {
-    "query": "local search evaluation metrics",
-    "expectedIds": ["tool-local-index-benchmark", "tool-atlas-vector-toolkit"]
-  },
-  {
-    "query": "supplier discovery service for procurement",
-    "expectedIds": ["service-supplier-discovery-sprint"]
-  },
-  {
-    "query": "taxonomy governance and facets",
-    "expectedIds": ["document-taxonomy-governance-playbook"]
-  },
-  {
-    "query": "security reviewer for AI vendors",
-    "expectedIds": ["person-sam-rivera"]
-  },
-  {
-    "query": "support provider for help desk operations",
-    "expectedIds": ["vendor-opendesk-support"]
-  }
+  { "query": "modern residential architecture renovation", "expectedIds": ["atelier-north-architecture"] },
+  { "query": "traditional kitchen consultation", "expectedIds": ["hearth-kitchen-studio"] },
+  { "query": "eclectic hospitality interiors", "expectedIds": ["harbor-interiors"] },
+  { "query": "modern hospitality landscape new construction", "expectedIds": ["terrain-landscape-architects"] },
+  { "query": "climate aware garden renewal", "expectedIds": ["wild-garden-design"] }
 ]

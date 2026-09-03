@@ -14,32 +14,41 @@ test("validates required directory entry fields", () => {
   assert.ok(invalid.errors.some((error) => error.includes("description")));
 
   const valid = validateEntry({
-    name: "Search Tool",
-    description: "Indexes directory data.",
-    category: "tools"
+    name: "Design Studio",
+    description: "Designs residential spaces.",
+    category: "Architecture",
+    businessType: "Residential Architect",
+    state: "California"
   });
   assert.equal(valid.ok, true);
 });
 
 test("normalizes taxonomy fields and generated ids", () => {
   const entry = normalizeEntry({
-    name: "Taxonomy Helper",
-    description: "Maintains controlled terms.",
-    category: "documents",
+    name: "Design Taxonomy Studio",
+    description: "Maintains controlled design terms.",
+    category: "Interior Design + Decor",
+    businessType: "Interior Designer",
+    state: "New York",
+    city: "Brooklyn",
+    rooms: ["Kitchen"],
+    projectTypes: ["Renovation"],
+    styles: ["Modern"],
+    services: ["Consultation"],
     tags: "taxonomy, facets",
     taxonomy: {
-      subcategory: "guides",
+      subcategory: "Interior Designer",
       aliases: ["Facet Guide"],
       facets: {
-        audience: "engineering"
+        rooms: "Kitchen"
       }
     }
   });
 
-  assert.equal(entry.id, "taxonomy-helper");
+  assert.equal(entry.id, "design-taxonomy-studio");
   assert.deepEqual(entry.tags, ["taxonomy", "facets"]);
-  assert.equal(entry.taxonomy.category, "documents");
-  assert.deepEqual(entry.taxonomy.facets.audience, ["engineering"]);
+  assert.equal(entry.taxonomy.category, "Interior Design + Decor");
+  assert.deepEqual(entry.taxonomy.facets.rooms, ["Kitchen"]);
 });
 
 test("validates a directory payload", () => {
@@ -48,7 +57,9 @@ test("validates a directory payload", () => {
       id: "ok",
       name: "OK",
       description: "Valid",
-      category: "tools"
+      category: "Architecture",
+      businessType: "Residential Architect",
+      state: "California"
     }]
   });
 
@@ -57,13 +68,46 @@ test("validates a directory payload", () => {
 });
 
 test("parses CSV imports with tag arrays", () => {
-  const rows = parseCsv('id,name,description,category,tags\nentry-one,Entry One,One description,tools,"ai|search"');
+  const rows = parseCsv('id,name,description,category,businessType,state,tags\nentry-one,Entry One,One description,Architecture,Residential Architect,California,"design|search"');
   assert.equal(rows.length, 1);
-  assert.deepEqual(rows[0].tags, ["ai", "search"]);
+  assert.deepEqual(rows[0].tags, ["design", "search"]);
 });
 
 test("returns validation errors from validateAndNormalizeEntry", () => {
-  const result = validateAndNormalizeEntry({ category: "tools" });
+  const result = validateAndNormalizeEntry({ category: "Architecture" });
   assert.equal(result.ok, false);
   assert.ok(result.errors.length > 0);
+});
+
+test("normalizes a controlled design profile and mirrors taxonomy fields", () => {
+  const result = validateAndNormalizeEntry({
+    id: "studio-test",
+    name: "Studio Test",
+    description: "Residential renovation practice.",
+    category: "Architecture",
+    businessType: "Residential Architect",
+    state: "California",
+    city: "San Francisco",
+    rooms: ["Kitchen"],
+    projectTypes: ["Renovation"],
+    styles: ["Modern"],
+    services: ["Full-service Design"]
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.entry.location, "San Francisco, California");
+  assert.equal(result.entry.taxonomy.subcategory, "Residential Architect");
+  assert.deepEqual(result.entry.taxonomy.facets.rooms, ["Kitchen"]);
+});
+
+test("rejects a business type outside its category", () => {
+  const result = validateAndNormalizeEntry({
+    name: "Invalid Studio",
+    description: "Invalid taxonomy pair.",
+    category: "Outdoor + Garden Design",
+    businessType: "Residential Architect",
+    state: "Oregon"
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join(" "), /Residential Architect.*Outdoor \+ Garden Design/);
 });
