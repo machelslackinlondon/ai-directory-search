@@ -1,40 +1,54 @@
-# Testing Guide
+# Testing guide
 
-Run all tests:
+## Fast suite
 
 ```bash
 npm test
 ```
 
-The suite uses Node's built-in test runner and no external services.
+The default suite uses Node's test runner. It covers validation, the controlled taxonomy, shared AND/global-OR filter behavior, memory parity, OpenSearch mapping/query/response construction, adapter lifecycle, recoverable fallback, HTTP/MCP/agent contracts, Compose configuration, and UI flows. The Docker-backed file is loaded but skipped unless `OPENSEARCH_LIVE_TEST=1`.
 
-## Coverage Areas
+## Live OpenSearch suite
 
-Unit tests:
+After `npm run setup:opensearch`:
 
-- Directory data validation.
-- CSV parsing.
-- Search adapter ranking.
-- Filter logic.
-- Optional local semantic mode.
-- Agent fallback behavior.
-- MCP tool schemas and admin guards.
+```bash
+npm run opensearch:verify
+npm run opensearch:test
+```
 
-Integration tests:
+`opensearch:verify` checks the `directory-profiles` alias has exactly one physical target, the strict mapping has schema version `1`, and the index contains the same six documents as the canonical store.
 
-- Search API.
-- Agent API.
-- Import/reindex flow.
-- Mock MCP calls.
-- Static app serving.
+The live suite uses the real store, official client, and production adapter path. It independently proves:
 
-UI-flow test:
+1. Native BM25 lexical ranking.
+2. Search-time `synonym_graph` retrieval.
+3. Indexed profile-alias retrieval.
+4. Positive bounded fuzzy matching and an over-bound negative case.
+5. Edge n-gram name/alias autocomplete.
 
-- Runs a search through the API.
-- Renders result cards with `public/renderers.js`.
-- Renders a detail view.
-- Renders the no-result state.
+It also verifies analyzer tokens, template/mapping metadata, filters, global preference OR, extra-match boosting, structured `matchLabels`, facet counts, and versioned reindex behavior. Live test indexes are retained, matching the rollback-friendly production lifecycle.
 
-## Fixtures
+## Evaluation
 
-Fixtures live in `tests/fixtures/`. Add small JSON or CSV files when testing import behavior.
+```bash
+npm run eval
+```
+
+The five project-owned design queries run against the deterministic memory adapter so evaluation stays repeatable and does not hide a primary-backend outage behind fallback. Expected completion metrics include top-3 accuracy `1` and grounded-answer rate `1`. See [Evaluation](evaluation.md).
+
+## Browser QA
+
+Start the OpenSearch-backed app with `npm run dev`, then check desktop and mobile widths:
+
+- Business Type, Category, and State remain visible and combine with AND.
+- More Filters reveals Rooms, Project Types, Styles, and Services with counts.
+- Checkbox changes remain pending until Apply Filters; Clear All removes them.
+- Applied filters produce removable chips and result-card `matchLabels`.
+- The live result count uses the API `total`, not just the current page length.
+- Result/detail navigation, agent answer, and admin stats work.
+- No error overlay or browser console error appears.
+
+## Fixtures and test isolation
+
+Fixtures live in `tests/fixtures/`. Fast tests should inject the memory adapter or a focused client double; only `tests/integration/opensearch-live.test.js` may depend on the local service. Never add a real password to fixtures, commands, screenshots, or reports.

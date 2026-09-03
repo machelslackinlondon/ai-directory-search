@@ -1,7 +1,7 @@
 [
-  { "query": "modern residential architecture renovation", "expectedIds": ["atelier-north-architecture"] },
-  { "query": "traditional kitchen consultation", "expectedIds": ["hearth-kitchen-studio"] },
-  { "query": "eclectic hospitality interiors", "expectedIds": ["harbor-interiors"] },
+  { "query": "remodeling calm homes Atelier North Architects", "expectedIds": ["atelier-north-architecture"] },
+  { "query": "traditional kitchen material consultation", "expectedIds": ["hearth-kitchen-studio"] },
+  { "query": "Harbor Design eclectic hospitality", "expectedIds": ["harbor-interiors"] },
   { "query": "modern hospitality landscape new construction", "expectedIds": ["terrain-landscape-architects"] },
   { "query": "climate aware garden renewal", "expectedIds": ["wild-garden-design"] }
 ]

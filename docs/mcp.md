@@ -1,51 +1,67 @@
-# MCP and Mock MCP Guide
+# MCP-compatible directory tools
 
-The app includes a mock MCP-compatible layer with explicit tool contracts. It uses the same directory store and search adapter as the API.
+The local MCP-compatible layer uses the same canonical store and OpenSearch-first adapter as HTTP and the agent.
 
-## List Tools
+## Discover tools
 
 ```bash
 npm run mcp list
-```
-
-HTTP:
-
-```bash
 curl http://127.0.0.1:3000/api/mcp/tools
 ```
 
-## Call a Tool
-
-CLI:
+## Search
 
 ```bash
-npm run mcp search_directory '{"query":"AI vendor risk","limit":3}'
+npm run mcp search_directory '{"query":"hospitality landscape","filters":{"projectTypes":["Hospitality"],"styles":["Modern"]},"limit":3}'
 ```
 
-HTTP:
+Equivalent HTTP call:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/mcp \
   -H 'content-type: application/json' \
-  -d '{"tool":"search_directory","args":{"query":"AI vendor risk","limit":3}}'
+  -d '{"tool":"search_directory","args":{"query":"hospitality landscape","filters":{"projectTypes":["Hospitality"],"styles":["Modern"]},"limit":3}}'
 ```
+
+Canonical filters are:
+
+- Primary AND: `category`, `businessType`, `state`
+- Global preference OR: arrays `rooms`, `projectTypes`, `styles`, `services`
+- Compatibility/search fields: `tags`; HTTP also accepts legacy `subcategory` as an alias for Business Type
+
+Selected preferences are one global OR even when they come from different arrays. Matching more selected values raises relevance. Search responses preserve `backend`, `fallback`, `fallbackReason`, `facets`, total, and structured labels:
+
+```json
+{
+  "backend": "opensearch",
+  "fallback": false,
+  "fallbackReason": null,
+  "results": [
+    {
+      "id": "terrain-landscape-architects",
+      "matchLabels": [
+        { "facet": "projectTypes", "value": "hospitality", "label": "Hospitality" },
+        { "facet": "styles", "value": "modern", "label": "Modern" }
+      ]
+    }
+  ]
+}
+```
+
+During a recoverable OpenSearch failure the same call returns equivalent memory results with `backend: "memory"`, `fallback: true`, and a stable reason. Authentication, authorization, malformed query, validation, and mapping failures remain visible.
 
 ## Tools
 
-- `search_directory`: search entries with query, filters, sort, limit, and mode.
-- `get_directory_entry`: fetch a single entry by ID.
-- `list_directory_categories`: list categories and subcategories.
-- `upsert_directory_entry`: admin-only create/update.
-- `delete_directory_entry`: admin-only delete.
-- `reindex_directory`: admin-only reindex.
-- `get_index_stats`: inspect index state.
+- `search_directory`: query, filter, sort, and limit profiles.
+- `get_directory_entry`: fetch one profile by ID.
+- `list_directory_categories`: list the three Categories and their Business Types.
+- `upsert_directory_entry`: validate/write canonical data and reindex (admin-only).
+- `delete_directory_entry`: delete canonical data and reindex (admin-only).
+- `reindex_directory`: rebuild memory and a versioned OpenSearch index (admin-only).
+- `get_index_stats`: inspect backend, fallback/cooldown, alias, schema, and count state.
+
+Mutation responses include their reindex result. If the canonical write succeeds but OpenSearch has a recoverable outage, the result explicitly reports memory/degraded indexing. Non-recoverable indexing errors are returned so operators can correct the schema or data rather than accepting a silent divergence.
 
 ## Guardrails
 
-Mutating tools call the same admin guard as the app. Set `ADMIN_TOKEN` in production and pass `adminToken` in tool args. Search and lookup tools are read-only.
-
-## Tool Contract Files
-
-- Schemas: `src/server/mcp/contracts.js`
-- Handlers: `src/server/mcp/tools.js`
-- Tests: `tests/unit/mcp.test.js` and `tests/integration/api.test.js`
+Set `ADMIN_TOKEN` in production and pass `adminToken` in mutation tool arguments. Read-only tools need no token. Schemas are in `src/server/mcp/contracts.js`; handlers are in `src/server/mcp/tools.js`.

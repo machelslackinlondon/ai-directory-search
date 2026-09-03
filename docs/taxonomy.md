@@ -1,56 +1,84 @@
-# Taxonomy Guide
+# Design-professional taxonomy
 
-Taxonomy makes directory entries easier to classify, filter, rank, and explain.
+`src/server/directory/designTaxonomy.js` is the controlled source for visible filter values. The canonical JSON file mirrors those values into each normalized profile and its legacy `taxonomy` object.
 
-## Concepts
+## Three categories
 
-- Category: the broad entry type, such as `people`, `companies`, `services`, `documents`, `tools`, or `vendors`.
-- Subcategory: a narrower grouping inside a category, such as `guides`, `evaluation`, or `support`.
-- Tags: concise labels that describe reusable topics, capabilities, domains, or technologies.
-- Facets: controlled filter dimensions with known values, such as `audience`, `maturity`, and `availability`.
-- Synonyms: terms users may type that should map to canonical language, such as `supplier` for `vendor`.
-- Related terms: neighboring concepts that help broaden discovery without changing the canonical tag.
-- Aliases: alternate names for a specific entry.
+Only these top-level categories are valid:
 
-## Example
+1. `Architecture`
+2. `Interior Design + Decor`
+3. `Outdoor + Garden Design`
+
+Builders and contractors are intentionally excluded. Business Type is the professional discipline and must belong to its selected Category:
+
+| Category | Business Types |
+| --- | --- |
+| Architecture | Building Architect; Interior Architect; Residential Architect |
+| Interior Design + Decor | Decorator; Design Consultant; Interior Design Consultant; Interior Designer; Kitchen Designer; Stylist |
+| Outdoor + Garden Design | Landscape Architect; Landscape Designer |
+
+State is a canonical full US state name or `District of Columbia`. `All States` is only a UI sentinel and is never stored or indexed.
+
+Category, Business Type, and State are the three primary filters. A profile must satisfy every selected primary filter (AND semantics).
+
+## Multi-select preferences
+
+The four controlled groups are:
+
+- Rooms: `Kitchen`, `Living Room`, `Bathroom`
+- Project Types: `Renovation`, `New Build`, `Hospitality`
+- Styles: `Modern`, `Traditional`, `Eclectic`
+- Services: `Full-service Design`, `Consultation`
+
+Selections across all groups create one global OR. At least one selected value must match; each additional matching value boosts the result. Aggregation counts are computed before this preference post-filter so the UI can show options available under the current free-text and primary filters.
+
+Matches are returned with display-safe canonical labels:
 
 ```json
 {
+  "facet": "services",
+  "value": "full-service design",
+  "label": "Full-service Design"
+}
+```
+
+Every item in a result's `matchLabels` corresponds to a currently selected preference and is rendered on its profile card.
+
+## Canonical profile fields
+
+```json
+{
+  "id": "atelier-north-architecture",
+  "name": "Atelier North Architecture",
+  "category": "Architecture",
+  "businessType": "Residential Architect",
+  "state": "California",
+  "city": "San Francisco",
+  "rooms": ["Kitchen", "Living Room"],
+  "projectTypes": ["Renovation", "New Build"],
+  "styles": ["Modern", "Traditional"],
+  "services": ["Full-service Design", "Consultation"],
   "taxonomy": {
-    "category": "documents",
-    "subcategory": "guides",
-    "tags": ["ai", "procurement", "security", "vendor"],
+    "subcategory": "Residential Architect",
     "facets": {
-      "audience": ["procurement", "legal"],
-      "maturity": ["production"]
+      "rooms": ["Kitchen", "Living Room"],
+      "projectTypes": ["Renovation", "New Build"],
+      "styles": ["Modern", "Traditional"],
+      "services": ["Full-service Design", "Consultation"]
     },
-    "synonyms": ["ai supplier checklist"],
-    "relatedTerms": ["compliance", "evaluation"],
-    "aliases": ["AI Procurement Guide"]
+    "aliases": ["Atelier North Architects"]
   }
 }
 ```
 
-## Governance Rules
+Validation canonicalizes case, whitespace, and accents for controlled values, rejects unknown values and invalid Category/Business Type pairs, and derives the display `location` from City and State when needed.
 
-- Use one primary category per entry.
-- Prefer stable tags over one-off labels.
-- Keep facet values controlled and reusable.
-- Add synonyms only when users actually search with alternate language.
-- Use aliases for names, abbreviations, and common shorthand.
-- Review taxonomy changes with search evaluation results.
+## Synonyms, aliases, and governance
 
-## How Taxonomy Improves Search
+- Global synonyms represent conservative domain equivalents such as `new build` and `new construction`; OpenSearch applies them with `synonym_graph` only at search time.
+- Profile synonyms improve recall for language specific to one record.
+- Aliases are alternate names for one profile, indexed as a strongly boosted text field and an autocomplete field.
+- Related terms are lower-weight discovery language, not replacements for canonical filters.
 
-The memory search adapter uses taxonomy fields in ranking. Tags, aliases, subcategories, facets, synonyms, and related terms can all contribute to match explanations. Better taxonomy means better recall for natural-language questions and more transparent "why this matched" output.
-
-## Evaluate Taxonomy Quality
-
-Use `npm run eval` after taxonomy changes. Watch:
-
-- Top-1 and top-3 accuracy.
-- Empty result rate.
-- Queries where expected entries only appear below rank 3.
-- Results whose explanation mentions weak fields instead of strong taxonomy signals.
-
-Add eval cases when introducing new categories, tags, facets, or synonyms.
+Changing controlled values or analyzer synonym rules requires validation updates, evaluation cases, and a schema/index review. Because existing field mappings cannot safely change in place, incompatible mapping or analysis changes require a new versioned template/index and an alias switch.

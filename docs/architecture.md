@@ -1,26 +1,78 @@
 # Architecture
 
-## Overview
+## System shape
 
-The project is a single local-first Node app:
+The project is one Node.js application with a static browser UI. `data/directory.json` is the canonical writable store. OpenSearch is a derived read index; losing it never loses directory records.
 
-- `public/`: static browser UI.
-- `src/server/http.js`: HTTP API and static file server.
-- `src/server/directory/`: schema validation, taxonomy helpers, CSV import, and file-backed store.
-- `src/server/search/`: swappable search adapter interface with a memory implementation.
-- `src/server/agent/`: deterministic server-side agent runtime.
-- `src/server/mcp/`: mock MCP-compatible tool contracts and handlers.
-- `src/server/evals/`: evaluation harness.
-- `tests/`: unit, integration, and UI-flow tests.
-- `docs/`: project guides.
+```text
+browser / HTTP / MCP / agent
+              |
+       async search contract
+              |
+  OpenSearch-first fallback adapter
+        /                 \
+versioned OpenSearch    warm memory index
+        \                 /
+       canonical JSON store
+```
 
-## UI
+The main boundaries are:
 
-The first screen is the usable search experience. It includes keyword search, natural-language agent questions, filters, sort controls, ranked result cards, match explanations, detail view, and admin import/reindex controls.
+- `src/server/http.js`: HTTP API and static-file server.
+- `src/server/directory/`: schema validation, design taxonomy, CSV import, and file store.
+- `src/server/search/`: memory, OpenSearch, and fallback adapters plus the shared filter contract.
+- `src/server/agent/`: deterministic, directory-grounded agent.
+- `src/server/mcp/`: tool schemas and handlers that reuse the same store and adapter.
+- `public/`: accessible search, filters, cards, detail view, agent answer, and admin tools.
 
-The browser calls API routes directly and uses `public/renderers.js` for result, detail, empty, loading, and agent answer rendering. The renderer is also imported by the UI-flow test.
+All adapter operations are promise-based. Tests inject the memory adapter unless they explicitly opt into the live OpenSearch suite.
 
-## API Routes
+## Index lifecycle and mapping
+
+`npm run opensearch:bootstrap` installs `directory-profiles-template-v1` before any documents are written. The template applies to `directory-profiles-v1-*`, uses `dynamic: strict`, records `_meta.schema_version: 1`, and creates one shard with no replicas for the single-node development stack.
+
+Applications read through the stable `directory-profiles` alias. Reindexing creates a timestamped physical index, analyzes representative input, bulk-indexes the full canonical snapshot, refreshes and verifies its count, then moves the alias in one atomic operation. A failed bulk or count check leaves the current alias untouched. Previous physical indexes are retained for manual rollback.
+
+The indexed document flattens controlled searchable fields while retaining the normalized profile in a non-indexed `profile` object. Exact primary/facet fields are normalized `keyword` values with text subfields where free-text discovery is useful. This prevents mapping explosion while preserving the API payload in `_source`.
+
+## Analysis and relevance
+
+Five signals are intentionally independent and live-tested:
+
+1. Native BM25 (`k1: 1.2`, `b: 0.75`, `discount_overlaps: true`) supplies lexical term-frequency and field-length scoring.
+2. A search-time `synonym_graph` expands conservative, multiword design equivalents such as `new build` and `new construction`.
+3. Indexed profile aliases find alternate firm names such as `CFA Studio`.
+4. Query-time `AUTO` fuzziness tolerates bounded ordinary spelling errors.
+5. Edge n-gram `name.autocomplete` and `aliases.autocomplete` fields support partial firm-name input.
+
+Names, aliases, and taxonomy text use lowercase plus ASCII folding without stemming because stemming can corrupt proper names. Descriptions use light English stemming for useful inflection matching. Synonyms run only at search time so multiword alternatives remain graph-aware and stored postings do not multiply. Fuzziness is bounded to a query clause rather than indexed into every field, limiting broad expansions and index growth. Autocomplete edge n-grams are likewise limited to names and aliases.
+
+## Search semantics
+
+The three primary filters—Category, Business Type, and State—are exact filters combined with AND. Category values are exactly `Architecture`, `Interior Design + Decor`, and `Outdoor + Garden Design`.
+
+Rooms, Project Types, Styles, and Services form one global preference OR. A profile must match at least one selected value across all four groups, and each additional selected-value match adds a score boost. Their `post_filter` does not narrow aggregations, so option counts continue to reflect the free-text query plus primary filters.
+
+Named clauses are decoded into structured result metadata:
+
+```json
+{
+  "matchLabels": [
+    { "facet": "rooms", "value": "kitchen", "label": "Kitchen" },
+    { "facet": "styles", "value": "modern", "label": "Modern" }
+  ]
+}
+```
+
+The UI renders those labels separately from free-text `whyMatched` explanations.
+
+## Failure behavior
+
+The fallback adapter always attempts OpenSearch first. Connection failures, timeouts, a missing alias/index, HTTP 429, and HTTP 502/503/504 open a 30-second cooldown by default and return memory results with `backend: "memory"`, `fallback: true`, and a stable `fallbackReason`. The first request after the cooldown probes OpenSearch; success closes degraded mode automatically.
+
+Malformed requests, mapping failures, and HTTP 400/401/403 are not availability failures. They remain visible instead of silently returning potentially misleading memory results. Both indexes are refreshed after canonical mutations, and recoverable OpenSearch reindex failure is reported as degraded metadata without discarding the canonical write.
+
+## API routes
 
 - `GET /api/search`
 - `GET /api/entries/:id`
@@ -32,41 +84,4 @@ The browser calls API routes directly and uses `public/renderers.js` for result,
 - `GET /api/mcp/tools`
 - `POST /api/mcp`
 
-Admin routes require `ADMIN_TOKEN` in production. In local development with no token configured, mutations are allowed for easy setup.
-
-## Directory Store
-
-The default store loads `data/directory.json` when present and falls back to `src/data/seed-directory.json`. `npm run seed` writes the seed into the writable data file.
-
-Entries are validated and normalized through `src/server/directory/schema.js`.
-
-## Search Adapter
-
-Search is behind an adapter object with:
-
-- `search(params)`
-- `getEntry(id)`
-- `listCategories()`
-- `reindex()`
-- `stats()`
-
-The default `memory` adapter ranks keyword matches using weighted fields. It supports category, subcategory, tag, location, facet, and metadata filters. `SEMANTIC_PROVIDER=local-hash` enables a deterministic vector-style rank boost without external services.
-
-## Agent Runtime
-
-The agent is intentionally small:
-
-1. Infer intent from the question.
-2. Infer category/tag filters from taxonomy.
-3. Use lookup, category listing, or search tools.
-4. Summarize only returned records.
-5. Include entry IDs as references.
-6. Refuse to invent entries when no records match.
-
-## MCP Layer
-
-The mock MCP layer exposes the same search and mutation logic through explicit tool contracts. This keeps API and MCP behavior aligned while avoiding a separate server process.
-
-## Optional External Services
-
-External AI, embedding, or vector providers are disabled by default. Environment variables are reserved so future adapters can be added without changing UI or agent contracts.
+`/api/stats` exposes memory and OpenSearch state, alias/index information when available, cooldown state, and safe error codes. It never exposes credentials.
