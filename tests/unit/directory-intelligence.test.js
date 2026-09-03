@@ -51,13 +51,34 @@ test("directory intelligence does not treat ordinary short searches as autocompl
   assert.notEqual(route.mode, "autocomplete");
 });
 
+test("directory intelligence recognizes canonical business, state, and preference constraints", () => {
+  const context = createTestContext();
+  const route = classifyDirectoryQuery("Decorator California Bathroom", {
+    store: context.store
+  });
+
+  assert.equal(route.mode, "graphql");
+  assert.equal(route.path, "deterministic");
+});
+
+test("directory autocomplete includes canonical states", () => {
+  const context = createTestContext();
+  const suggestions = searchSuggestions("cal", { store: context.store });
+
+  assert.ok(suggestions.some((suggestion) => suggestion.label === "California" && suggestion.type === "state"));
+});
+
 test("directory result formatting only uses present fields", () => {
   const context = createTestContext();
   const entry = context.store.getEntry("hearth-kitchen-studio");
-  const formatted = formatDirectoryResult({ entry });
+  const formatted = formatDirectoryResult({
+    entry,
+    matchLabels: [{ facet: "styles", value: "traditional", label: "Traditional" }]
+  });
 
   assert.match(formatted, /Hearth Kitchen Studio/);
   assert.match(formatted, /Kitchen Designer/);
   assert.match(formatted, /Chicago, Illinois/);
+  assert.match(formatted, /Traditional/);
   assert.doesNotMatch(formatted, /undefined|null/);
 });

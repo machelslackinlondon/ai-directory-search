@@ -1,4 +1,5 @@
 const { normalizeText, tokenize } = require("../utils/text");
+const { DESIGN_FACETS, US_STATES } = require("../directory/designTaxonomy");
 const { callMcpTool } = require("../mcp/tools");
 const {
   classifyDirectoryQuery,
@@ -10,10 +11,36 @@ function inferFilters(question, taxonomy, suppliedFilters = {}) {
   const text = normalizeText(question);
   const filters = { ...suppliedFilters };
 
-  if (!filters.category) {
-    const category = (taxonomy.categories || []).find((item) => text.includes(normalizeText(item.category)));
-    if (category) filters.category = category.category;
+  function matchingLabel(labels) {
+    return [...labels]
+      .sort((a, b) => normalizeText(b).length - normalizeText(a).length)
+      .find((label) => text.includes(normalizeText(label)));
   }
+
+  if (!filters.category) {
+    const category = matchingLabel((taxonomy.categories || []).map((item) => item.category));
+    if (category) filters.category = category;
+  }
+
+  if (!filters.businessType && !filters.subcategory) {
+    const businessType = matchingLabel(
+      (taxonomy.categories || []).flatMap((item) => item.subcategories || [])
+    );
+    if (businessType) filters.businessType = businessType;
+  }
+
+  if (!filters.state) {
+    const state = matchingLabel(US_STATES);
+    if (state) filters.state = state;
+  }
+
+  Object.entries(DESIGN_FACETS).forEach(([field, defaults]) => {
+    const selected = new Set(Array.isArray(filters[field]) ? filters[field] : []);
+    (taxonomy.facets?.[field] || defaults).forEach((label) => {
+      if (text.includes(normalizeText(label))) selected.add(label);
+    });
+    if (selected.size > 0) filters[field] = Array.from(selected);
+  });
 
   const tags = new Set(Array.isArray(filters.tags) ? filters.tags : []);
   (taxonomy.tags || []).forEach((tag) => {
@@ -38,7 +65,10 @@ function summarizeResults(question, searchResponse) {
   const lead = results[0].entry;
   const references = results.map((result) => `${result.entry.name} (${result.entry.id})`).join(", ");
   const topResults = results.slice(0, 3).map(formatDirectoryResult).join("; ");
-  const reasons = results.slice(0, 3).map((result) => `${result.entry.name}: ${result.whyMatched}`).join(" ");
+  const reasons = results.slice(0, 3).map((result) => {
+    const matchedPreferences = (result.matchLabels || []).map(({ label }) => label).join(", ");
+    return `${result.entry.name}: ${result.whyMatched}${matchedPreferences ? `; preference matches: ${matchedPreferences}` : ""}`;
+  }).join(" ");
   return `I found ${searchResponse.total} matching director${searchResponse.total === 1 ? "y entry" : "y entries"}. Top match: ${lead.name} (${lead.id}). Top results by relevance: ${topResults}. References: ${references}. Why these matched: ${reasons}`;
 }
 
@@ -58,7 +88,7 @@ function deterministicIntent(question) {
 }
 
 function applyLowConfidenceGuard(question, searchResponse) {
-  if (question && searchResponse.results[0] && searchResponse.results[0].score < 10) {
+  if (searchResponse.backend === "memory" && question && searchResponse.results[0]?.score < 10) {
     searchResponse.results = [];
     searchResponse.total = 0;
   }
@@ -140,7 +170,13 @@ async function answerDirectoryQuestion(question, context, options = {}) {
   }
 
   const filters = inferFilters(question, taxonomy, options.filters || {});
-  const mode = (await searchAdapter.stats()).semanticEnabled ? "hybrid" : "keyword";
+  const stats = await searchAdapter.stats();
+  const memoryStats = stats.adapter === "memory"
+    ? stats
+    : (stats.backend === "memory" ? stats.memory : null);
+  const mode = memoryStats?.semanticEnabled && memoryStats.semanticProvider === "local-hash"
+    ? "hybrid"
+    : "keyword";
   tools.push("search_directory");
   const route = classifyDirectoryQuery(question, { store, taxonomy }, {
     autocomplete: options.autocomplete,
@@ -183,6 +219,7 @@ async function answerDirectoryQuestion(question, context, options = {}) {
     results: searchResponse.results.map((result) => ({
       id: result.id,
       score: result.score,
+      matchLabels: result.matchLabels || [],
       whyMatched: result.whyMatched,
       entry: result.entry
     }))

@@ -58,15 +58,15 @@ async function callMcpTool(name, args = {}, context) {
   if (name === "upsert_directory_entry") {
     requireAdmin(args);
     const entry = store.upsertEntry(args.entry);
-    await searchAdapter.reindex();
-    return entry;
+    const reindex = await searchAdapter.reindex();
+    return { ...entry, reindex };
   }
 
   if (name === "delete_directory_entry") {
     requireAdmin(args);
     const deleted = store.deleteEntry(args.id);
-    await searchAdapter.reindex();
-    return { deleted, id: args.id };
+    const reindex = await searchAdapter.reindex();
+    return { deleted, id: args.id, reindex };
   }
 
   if (name === "reindex_directory") {

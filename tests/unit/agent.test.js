@@ -41,3 +41,109 @@ test("intent and filter inference are deterministic", () => {
   assert.equal(filters.category, "Architecture");
   assert.ok(filters.tags.includes("renovation"));
 });
+
+test("filter inference recognizes every canonical design filter", () => {
+  const context = createTestContext();
+  const filters = inferFilters(
+    "Show me Architecture Residential Architect in California for a Bathroom New Build in Modern style with Full-service Design",
+    context.store.getTaxonomy()
+  );
+
+  assert.deepEqual(filters, {
+    category: "Architecture",
+    businessType: "Residential Architect",
+    state: "California",
+    rooms: ["Bathroom"],
+    projectTypes: ["New Build"],
+    styles: ["Modern"],
+    services: ["Full-service Design"],
+    tags: ["modern", "new build", "residential"]
+  });
+});
+
+test("agent keeps low OpenSearch BM25 scores and exposes match labels in results and explanations", async () => {
+  const base = createTestContext();
+  let searchParams;
+  const entry = base.store.getEntry("atelier-north-architecture");
+  const context = {
+    store: base.store,
+    searchAdapter: {
+      async stats() {
+        return {
+          adapter: "opensearch",
+          semanticEnabled: true,
+          semanticProvider: "local-hash"
+        };
+      },
+      async search(params) {
+        searchParams = params;
+        return {
+          backend: "opensearch",
+          fallback: false,
+          fallbackReason: null,
+          mode: "keyword",
+          total: 1,
+          results: [{
+            id: entry.id,
+            entry,
+            score: 0.75,
+            matchLabels: [{ facet: "styles", value: "modern", label: "Modern" }],
+            whyMatched: "matched by ranking fallback"
+          }]
+        };
+      }
+    }
+  };
+
+  const response = await answerDirectoryQuestion(
+    "Show me Architecture Residential Architect in California with Modern style",
+    context
+  );
+
+  assert.equal(searchParams.mode, "keyword");
+  assert.equal(response.results.length, 1);
+  assert.deepEqual(response.results[0].matchLabels, [
+    { facet: "styles", value: "modern", label: "Modern" }
+  ]);
+  assert.match(response.answer, /Modern/);
+});
+
+test("agent retains local-hash hybrid mode only for the memory adapter", async () => {
+  const context = createTestContext({ searchOptions: { semanticProvider: "local-hash" } });
+  const response = await answerDirectoryQuestion("Show me modern Architecture", context);
+
+  assert.equal(response.mode, "hybrid");
+});
+
+test("agent still applies the fixed low-score guard to memory results", async () => {
+  const base = createTestContext();
+  const entry = base.store.getEntry("atelier-north-architecture");
+  const context = {
+    store: base.store,
+    searchAdapter: {
+      async stats() {
+        return { adapter: "memory", semanticEnabled: false, semanticProvider: null };
+      },
+      async search() {
+        return {
+          backend: "memory",
+          fallback: false,
+          fallbackReason: null,
+          mode: "keyword",
+          total: 1,
+          results: [{
+            id: entry.id,
+            entry,
+            score: 0.75,
+            matchLabels: [],
+            whyMatched: "matched by ranking fallback"
+          }]
+        };
+      }
+    }
+  };
+
+  const response = await answerDirectoryQuestion("Show me Architecture", context);
+  assert.deepEqual(response.results, []);
+  assert.equal(response.grounded, false);
+});

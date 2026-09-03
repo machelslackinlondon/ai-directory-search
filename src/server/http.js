@@ -3,6 +3,12 @@ const http = require("http");
 const path = require("path");
 const { URL } = require("url");
 const { answerDirectoryQuestion } = require("./agent/agent");
+const {
+  DESIGN_CATEGORIES,
+  DESIGN_FACETS,
+  US_STATES,
+  canonicalizeControlledValue
+} = require("./directory/designTaxonomy");
 const { createDirectoryStore } = require("./directory/store");
 const { createSearchAdapter } = require("./search/createSearchAdapter");
 const { callMcpTool, listMcpTools } = require("./mcp/tools");
@@ -58,17 +64,76 @@ function readBody(req) {
   });
 }
 
-function parseFilters(searchParams) {
+function getMany(searchParams, key) {
+  return searchParams.getAll(key)
+    .flatMap((value) => value.split(","))
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function invalidSearchFilter(field, value) {
+  const error = new Error(`Invalid search filter ${field}: ${value}.`);
+  error.code = "INVALID_SEARCH_FILTER";
+  error.statusCode = 400;
+  return error;
+}
+
+function canonicalControlledValue(field, value, allowed) {
+  if (!value) return "";
+  const canonical = canonicalizeControlledValue(allowed, value);
+  if (!canonical) throw invalidSearchFilter(field, value);
+  return canonical;
+}
+
+function parseFilters(searchParams, taxonomy = {}) {
   const filters = {};
-  if (searchParams.get("category")) filters.category = searchParams.get("category");
-  if (searchParams.get("subcategory")) filters.subcategory = searchParams.get("subcategory");
+  const categories = taxonomy.categories || DESIGN_CATEGORIES;
+  const categoryValue = searchParams.get("category")?.trim();
+  const businessTypeValue = (searchParams.get("businessType") || searchParams.get("subcategory"))?.trim();
+  const stateValue = searchParams.get("state")?.trim();
+
+  if (categoryValue) {
+    filters.category = canonicalControlledValue(
+      "category",
+      categoryValue,
+      categories.map(({ category }) => category)
+    );
+  }
+  if (businessTypeValue) {
+    filters.businessType = canonicalControlledValue(
+      "businessType",
+      businessTypeValue,
+      categories.flatMap(({ subcategories }) => subcategories || [])
+    );
+  }
+  if (filters.category && filters.businessType) {
+    const parent = categories.find(({ category }) => category === filters.category);
+    if (!parent?.subcategories?.includes(filters.businessType)) {
+      throw invalidSearchFilter("businessType", businessTypeValue);
+    }
+  }
+  if (stateValue) {
+    filters.state = canonicalControlledValue("state", stateValue, US_STATES);
+  }
   if (searchParams.get("location")) filters.location = searchParams.get("location");
-  if (searchParams.get("tags")) filters.tags = searchParams.get("tags").split(",").map((tag) => tag.trim()).filter(Boolean);
+  const tags = getMany(searchParams, "tags");
+  if (tags.length > 0) filters.tags = tags;
+
+  Object.entries(DESIGN_FACETS).forEach(([field, defaults]) => {
+    const values = getMany(searchParams, field);
+    if (values.length === 0) return;
+    const allowed = taxonomy.facets?.[field] || defaults;
+    filters[field] = values.map((value) => canonicalControlledValue(field, value, allowed));
+  });
 
   const facets = {};
   searchParams.getAll("facet").forEach((item) => {
     const [key, value] = item.split(":");
-    if (key && value) facets[key] = [...(facets[key] || []), value];
+    if (!key || !value) return;
+    const canonical = DESIGN_FACETS[key]
+      ? canonicalControlledValue(key, value, taxonomy.facets?.[key] || DESIGN_FACETS[key])
+      : value;
+    facets[key] = [...(facets[key] || []), canonical];
   });
   if (Object.keys(facets).length > 0) filters.facets = facets;
   return filters;
@@ -108,7 +173,7 @@ function createAppServer(options = {}) {
     if (req.method === "GET" && url.pathname === "/api/search") {
       const payload = await context.searchAdapter.search({
         query: url.searchParams.get("query") || "",
-        filters: parseFilters(url.searchParams),
+        filters: parseFilters(url.searchParams, context.store.getTaxonomy()),
         sort: url.searchParams.get("sort") || "relevance",
         limit: Number(url.searchParams.get("limit")) || 20,
         offset: Number(url.searchParams.get("offset")) || 0,

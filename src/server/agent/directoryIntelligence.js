@@ -1,4 +1,5 @@
 const { normalizeText, tokenize, unique } = require("../utils/text");
+const { US_STATES } = require("../directory/designTaxonomy");
 
 const STRUCTURED_PHRASES = [
   "filter by",
@@ -47,8 +48,14 @@ function hasExplicitConstraint(query, taxonomy = {}) {
   if (/\b(in|near|location|located in|team|role|skill|seniority)\b/.test(text)) return true;
 
   const categories = (taxonomy.categories || []).map((item) => normalizeText(item.category));
+  const businessTypes = (taxonomy.categories || [])
+    .flatMap((item) => item.subcategories || [])
+    .map(normalizeText);
   const tags = (taxonomy.tags || []).map(normalizeText);
-  return [...categories, ...tags].some((term) => term && text.includes(term));
+  const states = US_STATES.map(normalizeText);
+  const preferences = Object.values(taxonomy.facets || {}).flat().map(normalizeText);
+  return [...categories, ...businessTypes, ...states, ...preferences, ...tags]
+    .some((term) => term && text.includes(term));
 }
 
 function isAutocompleteLike(query, taxonomy = {}) {
@@ -62,6 +69,8 @@ function isAutocompleteLike(query, taxonomy = {}) {
   const knownTerms = new Set([
     ...(taxonomy.tags || []).map(normalizeText),
     ...(taxonomy.categories || []).map((item) => normalizeText(item.category)),
+    ...(taxonomy.categories || []).flatMap((item) => item.subcategories || []).map(normalizeText),
+    ...US_STATES.map(normalizeText),
     ...Object.values(taxonomy.facets || {}).flat().map(normalizeText),
     ...Object.keys(taxonomy.aliases || {}).map(normalizeText)
   ]);
@@ -126,6 +135,7 @@ function candidateTypePriority(type) {
     category: 75,
     tag: 70,
     location: 65,
+    state: 65,
     alias: 60
   };
   return priorities[type] || 50;
@@ -163,6 +173,7 @@ function collectSuggestionCandidates(entries = [], taxonomy = {}) {
   Object.values(taxonomy.facets || {}).forEach((values) => {
     (values || []).forEach((value) => addCandidate(candidates, value, "tag"));
   });
+  US_STATES.forEach((state) => addCandidate(candidates, state, "state"));
 
   return candidates;
 }
@@ -226,7 +237,8 @@ function formatDirectoryResult(result) {
     entry.name,
     metadata.role,
     metadata.team || metadata.owner || metadata.accountOwner,
-    entry.location
+    entry.location,
+    ...(result.matchLabels || []).map(({ label }) => label)
   ].filter(Boolean);
   return unique(parts).join(" | ");
 }

@@ -1,3 +1,18 @@
+const directoryFiltersSchema = {
+  type: "object",
+  properties: {
+    category: { type: "string" },
+    businessType: { type: "string" },
+    state: { type: "string" },
+    tags: { type: "array", items: { type: "string" } },
+    rooms: { type: "array", items: { type: "string" } },
+    projectTypes: { type: "array", items: { type: "string" } },
+    styles: { type: "array", items: { type: "string" } },
+    services: { type: "array", items: { type: "string" } }
+  },
+  additionalProperties: false
+};
+
 const toolSchemas = {
   search_directory: {
     description: "Search directory entries using the active search adapter.",
@@ -5,12 +20,13 @@ const toolSchemas = {
       type: "object",
       properties: {
         query: { type: "string" },
-        filters: { type: "object" },
+        filters: directoryFiltersSchema,
         sort: { type: "string", enum: ["relevance", "name", "newest", "updated", "category"] },
         limit: { type: "number", minimum: 1, maximum: 100 },
         mode: { type: "string", enum: ["keyword", "semantic", "hybrid"] }
       },
-      required: ["query"]
+      required: ["query"],
+      additionalProperties: false
     }
   },
   get_directory_entry: {
@@ -20,14 +36,16 @@ const toolSchemas = {
       properties: {
         id: { type: "string" }
       },
-      required: ["id"]
+      required: ["id"],
+      additionalProperties: false
     }
   },
   list_directory_categories: {
     description: "List directory categories and subcategories.",
     inputSchema: {
       type: "object",
-      properties: {}
+      properties: {},
+      additionalProperties: false
     }
   },
   upsert_directory_entry: {
@@ -39,7 +57,8 @@ const toolSchemas = {
         adminToken: { type: "string" },
         entry: { type: "object" }
       },
-      required: ["entry"]
+      required: ["entry"],
+      additionalProperties: false
     }
   },
   delete_directory_entry: {
@@ -51,7 +70,8 @@ const toolSchemas = {
         adminToken: { type: "string" },
         id: { type: "string" }
       },
-      required: ["id"]
+      required: ["id"],
+      additionalProperties: false
     }
   },
   reindex_directory: {
@@ -61,18 +81,21 @@ const toolSchemas = {
       type: "object",
       properties: {
         adminToken: { type: "string" }
-      }
+      },
+      additionalProperties: false
     }
   },
   get_index_stats: {
     description: "Return index and adapter statistics.",
     inputSchema: {
       type: "object",
-      properties: {}
+      properties: {},
+      additionalProperties: false
     }
   }
 };
 
 module.exports = {
+  directoryFiltersSchema,
   toolSchemas
 };
