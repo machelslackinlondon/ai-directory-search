@@ -42,8 +42,11 @@ function normalizedFilters(filters = {}) {
 function preferenceClause(facet, label) {
   const value = normalizeKeyword(label);
   return {
-    constant_score: { filter: { term: { [facet]: value } }, boost: 4 },
-    _name: `preference__${facet}__${slugify(label)}`
+    constant_score: {
+      filter: { term: { [facet]: value } },
+      boost: 4,
+      _name: `preference__${facet}__${slugify(label)}`
+    }
   };
 }
 

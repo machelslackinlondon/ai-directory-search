@@ -55,12 +55,13 @@ test("normalizes punctuation-preserving exact filters and encodes every preferen
     { term: { tags: "residential" } }
   ]);
   assert.equal(body.query.bool.must[0].match_all !== undefined, true);
-  assert.deepEqual(body.query.bool.should.map((clause) => clause._name), [
+  assert.deepEqual(body.query.bool.should.map((clause) => clause.constant_score._name), [
     "preference__rooms__living-room",
     "preference__projectTypes__new-build",
     "preference__styles__modern",
     "preference__services__full-service-design"
   ]);
+  assert.equal(body.query.bool.should.every((clause) => clause._name === undefined), true);
   assert.deepEqual(Object.keys(body.aggs).sort(), [
     "businessType", "category", "projectTypes", "rooms", "services", "state", "styles"
   ]);

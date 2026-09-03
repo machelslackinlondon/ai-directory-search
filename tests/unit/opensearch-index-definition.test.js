@@ -50,10 +50,10 @@ test("maps searchable keywords, narrative text, aliases, and dates explicitly", 
 
 test("exports hand-checked analyzer cases and deterministic versioned physical names", () => {
   assert.deepEqual(ANALYZE_CASES, [
-    { analyzer: "directory_text", text: "Caf\u00e9 MODERN", tokens: ["cafe", "modern"] },
-    { analyzer: "directory_description_index", text: "renovating", tokens: ["renov"] },
-    { analyzer: "directory_description_search", text: "remodel", tokens: ["remodel", "remodeling", "renovation"] },
-    { analyzer: "directory_autocomplete", text: "Arch", tokens: ["ar", "arc", "arch"] }
+    { analyzer: "directory_text", text: "Caf\u00e9 MODERN", expected: ["cafe", "modern"] },
+    { analyzer: "directory_description_index", text: "renovating", expected: ["renovate"] },
+    { analyzer: "directory_description_search", text: "remodel", expected: ["remodel", "remodeling", "renovation"] },
+    { analyzer: "directory_autocomplete", text: "Arch", expected: ["ar", "arc", "arch"] }
   ]);
   assert.equal(makePhysicalIndexName(new Date("2026-09-03T12:34:56.000Z")), "directory-profiles-v1-20260903123456");
 });

@@ -40,7 +40,10 @@ test("accepts plain response bodies, keeps exact totals, and ignores unknown nam
       _source: { profile: seed.entries[1] },
       matched_queries: ["unrelated__name", "preference__services__consultation"]
     }] },
-    aggregations: { category: { buckets: [{ key: "architecture", doc_count: 2 }] } }
+    aggregations: { category: { buckets: [
+      { key: "architecture", doc_count: 2 },
+      { key: "unapproved-category", doc_count: 9 }
+    ] } }
   }, { query: "studio", sort: "name", filters: {} }, taxonomy, {
     backend: "memory", fallback: true, fallbackReason: "unavailable"
   });
@@ -53,6 +56,7 @@ test("accepts plain response bodies, keeps exact totals, and ignores unknown nam
     { facet: "services", value: "consultation", label: "Consultation" }
   ]);
   assert.equal(parsed.facets.category[0].label, "Architecture");
+  assert.deepEqual(parsed.facets.category, [{ value: "architecture", label: "Architecture", count: 2 }]);
   assert.equal(parsed.fallback, true);
   assert.equal(parsed.fallbackReason, "unavailable");
 });

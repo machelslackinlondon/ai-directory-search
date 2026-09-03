@@ -128,10 +128,10 @@ const INDEX_TEMPLATE = {
 };
 
 const ANALYZE_CASES = [
-  { analyzer: "directory_text", text: "Caf\u00e9 MODERN", tokens: ["cafe", "modern"] },
-  { analyzer: "directory_description_index", text: "renovating", tokens: ["renov"] },
-  { analyzer: "directory_description_search", text: "remodel", tokens: ["remodel", "remodeling", "renovation"] },
-  { analyzer: "directory_autocomplete", text: "Arch", tokens: ["ar", "arc", "arch"] }
+  { analyzer: "directory_text", text: "Caf\u00e9 MODERN", expected: ["cafe", "modern"] },
+  { analyzer: "directory_description_index", text: "renovating", expected: ["renovate"] },
+  { analyzer: "directory_description_search", text: "remodel", expected: ["remodel", "remodeling", "renovation"] },
+  { analyzer: "directory_autocomplete", text: "Arch", expected: ["ar", "arc", "arch"] }
 ];
 
 function makePhysicalIndexName(now = new Date()) {

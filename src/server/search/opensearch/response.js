@@ -15,7 +15,7 @@ function canonicalLabel(facet, value, taxonomy) {
   const normalized = normalizeKeyword(value);
   return labelsForFacet(facet, taxonomy).find((label) =>
     normalizeKeyword(label) === normalized || slugify(label) === String(value)
-  ) || String(value);
+  ) || null;
 }
 
 function decodePreferenceQueryName(name, taxonomy) {
@@ -57,11 +57,10 @@ function parseSearchResponse(response, params = {}, taxonomy = {}, metadata = {}
   });
   const facets = Object.fromEntries(Object.entries(body.aggregations || {}).map(([facet, aggregation]) => [
     facet,
-    (aggregation.buckets || []).map(({ key, doc_count: count }) => ({
-      value: slugify(key),
-      label: canonicalLabel(facet, key, taxonomy),
-      count
-    }))
+    (aggregation.buckets || []).flatMap(({ key, doc_count: count }) => {
+      const label = canonicalLabel(facet, key, taxonomy);
+      return label ? [{ value: slugify(key), label, count }] : [];
+    })
   ]));
 
   return {
