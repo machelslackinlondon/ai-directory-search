@@ -63,13 +63,10 @@ test("operations commands validate Compose before startup and keep live tests op
   assert.match(scripts["setup:opensearch"], /^npm run opensearch:up && npm run opensearch:wait/);
 });
 
-test("all nine live checks share one setup lifecycle", () => {
+test("ordinary suite preserves all nine opt-in live checks as skips", () => {
   const environment = {
     ...process.env,
-    OPENSEARCH_LIVE_TEST: "1",
-    OPENSEARCH_USERNAME: "admin",
-    OPENSEARCH_PASSWORD: "",
-    OPENSEARCH_INITIAL_ADMIN_PASSWORD: ""
+    OPENSEARCH_LIVE_TEST: "0"
   };
   delete environment.NODE_TEST_CONTEXT;
   const result = spawnSync(process.execPath, [
@@ -81,11 +78,43 @@ test("all nine live checks share one setup lifecycle", () => {
     env: environment
   });
   const output = `${result.stdout}${result.stderr}`;
-  const setupFailures = output.match(/OpenSearch password is required when a username is configured/g) || [];
 
-  assert.notEqual(result.status, 0);
+  assert.equal(result.status, 0, output);
   assert.match(output, /tests 9/);
-  assert.equal(setupFailures.length, 1, output);
+  assert.match(output, /skipped 9/);
+});
+
+test("live lifecycle awaits async setup before checks and closes after all nine", () => {
+  const script = `
+    const test = require("node:test");
+    const assert = require("node:assert/strict");
+    const { registerLiveChecks } = require("./tests/liveTestLifecycle");
+    let ready = false;
+    let checked = 0;
+    registerLiveChecks(test, {
+      name: "async lifecycle fixture",
+      enabled: true,
+      setup: async () => { await new Promise((resolve) => setImmediate(resolve)); ready = true; },
+      close: async () => { await new Promise((resolve) => setImmediate(resolve)); assert.equal(checked, 9); },
+      checks: Array.from({ length: 9 }, (_, index) => [\`check \${index + 1}\`, async () => {
+        await new Promise((resolve) => setImmediate(resolve));
+        assert.equal(ready, true);
+        checked += 1;
+      }])
+    });
+  `;
+  const environment = { ...process.env };
+  delete environment.NODE_TEST_CONTEXT;
+  const result = spawnSync(process.execPath, ["-e", script], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    env: environment
+  });
+  const output = `${result.stdout}${result.stderr}`;
+
+  assert.equal(result.status, 0, output);
+  assert.match(output, /tests 10/);
+  assert.match(output, /pass 10/);
 });
 
 test("local environment example documents secured OpenSearch defaults without a password", () => {

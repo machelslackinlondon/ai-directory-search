@@ -5,9 +5,10 @@ const { createDirectoryStore } = require("../../src/server/directory/store");
 const { createOpenSearchClient } = require("../../src/server/search/opensearch/client");
 const { createOpenSearchSearchAdapter, bodyOf } = require("../../src/server/search/opensearchSearchAdapter");
 const { SCHEMA_VERSION } = require("../../src/server/search/opensearch/indexDefinition");
+const { registerLiveChecks } = require("../liveTestLifecycle");
 
 const live = process.env.OPENSEARCH_LIVE_TEST === "1";
-const liveTest = live ? test : test.skip;
+const liveChecks = [];
 const expectedId = "atelier-north-architecture";
 let client;
 let adapter;
@@ -23,34 +24,35 @@ function facetCount(result, facet, label) {
   return result.facets[facet].find((item) => item.label === label)?.count;
 }
 
-test.describe("OpenSearch live integration", () => {
-if (live) {
-  test.before(async () => {
-    store = createDirectoryStore();
-    client = createOpenSearchClient();
-    adapter = createOpenSearchSearchAdapter(store, { client });
-    await adapter.waitForReady();
+function liveTest(name, check) {
+  liveChecks.push([name, check]);
+}
 
-    let tick = Date.now() + (process.pid * 1_000);
-    adapter = createOpenSearchSearchAdapter(store, {
-      client,
-      now: () => {
-        const current = new Date(tick);
-        tick += 1_000;
-        return current;
-      }
-    });
-    const firstBootstrap = await adapter.bootstrap();
-    const secondBootstrap = await adapter.bootstrap();
-    const reindexed = await adapter.reindex();
-    const verified = await adapter.verify();
-    physicalIndex = reindexed.physicalIndex;
-    lifecycle = { firstBootstrap, secondBootstrap, reindexed, verified };
-  });
+async function setupLiveLifecycle() {
+  store = createDirectoryStore();
+  client = createOpenSearchClient();
+  adapter = createOpenSearchSearchAdapter(store, { client });
+  await adapter.waitForReady();
 
-  test.after(async () => {
-    if (adapter) await adapter.close();
+  let tick = Date.now() + (process.pid * 1_000);
+  adapter = createOpenSearchSearchAdapter(store, {
+    client,
+    now: () => {
+      const current = new Date(tick);
+      tick += 1_000;
+      return current;
+    }
   });
+  const firstBootstrap = await adapter.bootstrap();
+  const secondBootstrap = await adapter.bootstrap();
+  const reindexed = await adapter.reindex();
+  const verified = await adapter.verify();
+  physicalIndex = reindexed.physicalIndex;
+  lifecycle = { firstBootstrap, secondBootstrap, reindexed, verified };
+}
+
+async function closeLiveLifecycle() {
+  if (adapter) await adapter.close();
 }
 
 liveTest("lifecycle is idempotent and leaves one stable alias over all six strict-schema documents", async () => {
@@ -156,4 +158,11 @@ liveTest("facet aggregations report canonical counts for all indexed documents",
   assert.equal(facetCount(result, "styles", "Modern"), 4);
   assert.equal(facetCount(result, "services", "Consultation"), 4);
 });
+
+registerLiveChecks(test, {
+  name: "OpenSearch live integration",
+  enabled: live,
+  setup: setupLiveLifecycle,
+  close: closeLiveLifecycle,
+  checks: liveChecks
 });
