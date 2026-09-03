@@ -18,6 +18,12 @@
     return (tags || []).slice(0, 6).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
   }
 
+  function renderMatchLabels(labels) {
+    return (labels || []).map(({ facet, label }) =>
+      `<span class="match-label" data-facet="${escapeHtml(facet)}">${escapeHtml(label)}</span>`
+    ).join("");
+  }
+
   function renderState(message, tone) {
     return `<div class="state ${tone || ""}" role="status">${escapeHtml(message)}</div>`;
   }
@@ -36,6 +42,7 @@
             <span>
               <strong>${escapeHtml(entry.name)}</strong>
               <small>${escapeHtml(entry.category)}${entry.location ? ` · ${escapeHtml(entry.location)}` : ""}</small>
+              ${renderMatchLabels(result.matchLabels)}
             </span>
             <span class="score">${escapeHtml(Number(result.score || 0).toFixed(1))}</span>
           </span>
@@ -95,6 +102,7 @@
     escapeHtml,
     renderAgentAnswer,
     renderDetail,
+    renderMatchLabels,
     renderResultList,
     renderState,
     renderTags

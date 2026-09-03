@@ -44,6 +44,21 @@ button:hover {
   border-color: var(--accent);
 }
 
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(23, 107, 135, 0.35);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  border-color: var(--line);
+  background: #e7ece9;
+  color: #65716a;
+  cursor: not-allowed;
+}
+
 .shell {
   min-height: 100vh;
   padding: 24px;
@@ -51,6 +66,7 @@ button:hover {
 
 .topbar,
 .command-band,
+.directory-filters,
 .workbench,
 .admin-grid {
   max-width: 1440px;
@@ -138,6 +154,120 @@ h2 {
 .agent-box {
   display: grid;
   gap: 10px;
+}
+
+.directory-filters {
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: 14px;
+}
+
+.primary-filter-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.primary-filter-row .primary {
+  min-height: 40px;
+  padding: 9px 28px;
+}
+
+.more-filters-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 14px;
+  padding: 11px 12px;
+  color: var(--ink);
+  text-align: left;
+}
+
+.more-filters-toggle > span:first-child {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.more-filters-toggle > span:last-child {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+#more-filters-panel {
+  display: grid;
+  gap: 16px;
+  padding: 18px 2px 2px;
+}
+
+.facet-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.facet-grid fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.facet-grid legend {
+  margin-bottom: 9px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+[data-facet-options] {
+  display: grid;
+  gap: 7px;
+}
+
+.facet-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.facet-option input {
+  width: 16px;
+  min-height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.facet-option strong {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.filter-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.filter-actions button {
+  min-height: 40px;
+  padding: 9px 16px;
 }
 
 label {
@@ -306,6 +436,47 @@ textarea {
   padding: 12px;
 }
 
+.applied-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 10px 14px 0;
+}
+
+.applied-filter-chips:empty {
+  display: none;
+}
+
+.filter-chip,
+.match-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 27px;
+  border: 1px solid #b9d8e4;
+  border-radius: 999px;
+  background: #f3f9fb;
+  color: var(--accent-strong);
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.filter-chip__remove {
+  width: 18px;
+  min-height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  line-height: 1;
+}
+
+.filter-chip__remove:hover {
+  background: #d9edf3;
+}
+
 .result-card {
   display: grid;
   gap: 10px;
@@ -336,6 +507,10 @@ textarea {
   display: block;
   color: var(--muted);
   margin-top: 4px;
+}
+
+.match-label {
+  margin: 7px 4px 0 0;
 }
 
 .score {
@@ -515,6 +690,10 @@ textarea {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .facet-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .results-column,
   .detail-column,
   .admin-import,
@@ -544,7 +723,23 @@ textarea {
 
   .filters,
   .detail-grid,
-  .admin-controls {
+  .admin-controls,
+  .primary-filter-row,
+  .facet-grid {
     grid-template-columns: 1fr;
+  }
+
+  .primary-filter-row .primary {
+    width: 100%;
+  }
+
+  .more-filters-toggle {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .filter-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
   }
 }

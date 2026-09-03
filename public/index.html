@@ -23,10 +23,7 @@
         <section class="command-band" aria-label="Search controls">
           <div class="search-box">
             <label for="search-input">Search</label>
-            <div class="input-row">
-              <input id="search-input" type="search" placeholder="Find entries, vendors, tools, guides, people">
-              <button id="search-button" class="primary" type="button">Search</button>
-            </div>
+            <input id="search-input" type="search" placeholder="Find an expert or project need">
           </div>
           <div class="agent-box">
             <label for="agent-input">Ask</label>
@@ -38,22 +35,60 @@
           </div>
         </section>
 
-        <section class="workbench">
-          <aside class="filters" aria-label="Filters">
-            <label>
+        <section class="directory-filters" aria-label="Directory filters">
+          <div class="primary-filter-row">
+            <label for="business-type-filter">
+              Business Type
+              <select id="business-type-filter">
+                <option value="">All business types</option>
+              </select>
+            </label>
+            <label for="category-filter">
               Category
               <select id="category-filter">
                 <option value="">All categories</option>
               </select>
             </label>
-            <label>
-              Tags
-              <input id="tag-filter" type="text" placeholder="ai, search">
+            <label for="state-filter">
+              State
+              <select id="state-filter">
+                <option value="">All states</option>
+              </select>
             </label>
-            <label>
-              Location
-              <input id="location-filter" type="text" placeholder="Remote, London, US">
-            </label>
+            <button id="search-button" class="primary" type="button">Search</button>
+          </div>
+          <button id="more-filters-toggle" class="more-filters-toggle" type="button" aria-expanded="false" aria-controls="more-filters-panel">
+            <span>More filters</span>
+            <span>Rooms, project type, style and services</span>
+          </button>
+          <section id="more-filters-panel" hidden>
+            <div class="facet-grid">
+              <fieldset>
+                <legend>Rooms</legend>
+                <div data-facet-options="rooms"></div>
+              </fieldset>
+              <fieldset>
+                <legend>Project Type</legend>
+                <div data-facet-options="projectTypes"></div>
+              </fieldset>
+              <fieldset>
+                <legend>Style</legend>
+                <div data-facet-options="styles"></div>
+              </fieldset>
+              <fieldset>
+                <legend>Services</legend>
+                <div data-facet-options="services"></div>
+              </fieldset>
+            </div>
+            <div class="filter-actions">
+              <button id="clear-filters" class="ghost" type="button">Clear All</button>
+              <button id="apply-filters" class="primary" type="button">Apply Filters</button>
+            </div>
+          </section>
+        </section>
+
+        <section class="workbench">
+          <aside class="filters" aria-label="Filters">
             <label>
               Sort
               <select id="sort-control">
@@ -85,10 +120,11 @@
             <div class="panel-head">
               <div>
                 <p class="eyebrow">Ranked results</p>
-                <h2 id="result-count">0 entries</h2>
+                <h2 id="result-count" aria-live="polite">0 entries</h2>
               </div>
               <button id="clear-button" class="ghost" type="button">Clear</button>
             </div>
+            <div id="applied-filter-chips" class="applied-filter-chips" aria-live="polite"></div>
             <div id="results" class="results-list" aria-live="polite"></div>
           </section>
 

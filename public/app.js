@@ -1,4 +1,13 @@
 const renderers = window.DirectoryRenderers;
+const PREFERENCE_FIELDS = ["rooms", "projectTypes", "styles", "services"];
+
+function emptyPreferences() {
+  return Object.fromEntries(PREFERENCE_FIELDS.map((field) => [field, []]));
+}
+
+function copyPreferences(preferences) {
+  return Object.fromEntries(PREFERENCE_FIELDS.map((field) => [field, [...(preferences[field] || [])]]));
+}
 
 const state = {
   categories: [],
@@ -8,6 +17,9 @@ const state = {
   agent: null,
   agentLoading: false,
   activityLog: [],
+  pendingPreferences: emptyPreferences(),
+  appliedPreferences: emptyPreferences(),
+  facets: {},
   loading: false,
   error: null,
   view: "search"
@@ -19,9 +31,15 @@ const elements = {
   agentInput: document.querySelector("#agent-input"),
   agentButton: document.querySelector("#agent-button"),
   agentInlineAnswer: document.querySelector("#agent-inline-answer"),
+  businessTypeFilter: document.querySelector("#business-type-filter"),
   categoryFilter: document.querySelector("#category-filter"),
-  tagFilter: document.querySelector("#tag-filter"),
-  locationFilter: document.querySelector("#location-filter"),
+  stateFilter: document.querySelector("#state-filter"),
+  moreFiltersToggle: document.querySelector("#more-filters-toggle"),
+  moreFiltersPanel: document.querySelector("#more-filters-panel"),
+  facetOptions: document.querySelectorAll("[data-facet-options]"),
+  appliedFilterChips: document.querySelector("#applied-filter-chips"),
+  applyFilters: document.querySelector("#apply-filters"),
+  clearFilters: document.querySelector("#clear-filters"),
   sortControl: document.querySelector("#sort-control"),
   modeControl: document.querySelector("#mode-control"),
   resultCount: document.querySelector("#result-count"),
@@ -131,8 +149,9 @@ async function api(path, options) {
 function getFilters() {
   return {
     category: elements.categoryFilter.value,
-    tags: elements.tagFilter.value.split(",").map((tag) => tag.trim()).filter(Boolean),
-    location: elements.locationFilter.value
+    businessType: elements.businessTypeFilter.value,
+    state: elements.stateFilter.value,
+    ...copyPreferences(state.appliedPreferences)
   };
 }
 
@@ -143,13 +162,83 @@ function searchUrl() {
   params.set("mode", elements.modeControl.value);
   const filters = getFilters();
   if (filters.category) params.set("category", filters.category);
-  if (filters.tags.length > 0) params.set("tags", filters.tags.join(","));
-  if (filters.location) params.set("location", filters.location);
+  if (filters.businessType) params.set("businessType", filters.businessType);
+  if (filters.state) params.set("state", filters.state);
+  PREFERENCE_FIELDS.forEach((field) => {
+    filters[field].forEach((value) => params.append(field, value));
+  });
   return `/api/search?${params.toString()}`;
+}
+
+function renderPrimaryOptions() {
+  const selectedCategory = elements.categoryFilter.value;
+  const selectedBusinessType = elements.businessTypeFilter.value;
+  const selectedState = elements.stateFilter.value;
+  const categories = state.categories || [];
+  const businessTypes = selectedCategory
+    ? (categories.find((item) => item.category === selectedCategory)?.subcategories || [])
+    : categories.flatMap((item) => item.subcategories || []);
+  const states = state.facets.state || state.states || [];
+
+  elements.categoryFilter.innerHTML = '<option value="">All categories</option>' + categories
+    .map((item) => `<option value="${renderers.escapeHtml(item.category)}">${renderers.escapeHtml(item.category)}</option>`)
+    .join("");
+  elements.categoryFilter.value = selectedCategory;
+  elements.businessTypeFilter.innerHTML = '<option value="">All business types</option>' + businessTypes
+    .map((item) => `<option value="${renderers.escapeHtml(item)}">${renderers.escapeHtml(item)}</option>`)
+    .join("");
+  elements.businessTypeFilter.value = businessTypes.includes(selectedBusinessType) ? selectedBusinessType : "";
+  elements.stateFilter.innerHTML = '<option value="">All states</option>' + states
+    .map((item) => {
+      const label = typeof item === "string" ? item : item.label;
+      return `<option value="${renderers.escapeHtml(label)}">${renderers.escapeHtml(label)}</option>`;
+    })
+    .join("");
+  elements.stateFilter.value = selectedState;
+}
+
+function facetLabels(field) {
+  const taxonomyLabels = state.taxonomyFacets?.[field] || [];
+  const responseLabels = (state.facets[field] || []).map((item) => typeof item === "string" ? item : item.label);
+  return [...new Set([...taxonomyLabels, ...responseLabels])];
+}
+
+function renderFacetOptions() {
+  elements.facetOptions.forEach((container) => {
+    const field = container.dataset.facetOptions || container.selector?.match(/"(.+)"/)?.[1];
+    const counts = new Map((state.facets[field] || []).map((item) => [typeof item === "string" ? item : item.label, typeof item === "string" ? 0 : item.count]));
+    container.innerHTML = facetLabels(field).map((label) => {
+      const checked = state.pendingPreferences[field].includes(label) ? " checked" : "";
+      return `<label class="facet-option"><input type="checkbox" name="${renderers.escapeHtml(field)}" value="${renderers.escapeHtml(label)}"${checked}><span>${renderers.escapeHtml(label)}</span><strong>${renderers.escapeHtml(counts.get(label) || 0)}</strong></label>`;
+    }).join("");
+  });
+}
+
+function appliedFilterEntries() {
+  const primary = [
+    ["category", elements.categoryFilter.value],
+    ["businessType", elements.businessTypeFilter.value],
+    ["state", elements.stateFilter.value]
+  ].filter(([, value]) => value);
+  const preferences = PREFERENCE_FIELDS.flatMap((field) => state.appliedPreferences[field].map((value) => [field, value]));
+  return [...primary, ...preferences];
+}
+
+function renderAppliedFilterChips() {
+  elements.appliedFilterChips.innerHTML = appliedFilterEntries().map(([field, value]) =>
+    `<span class="filter-chip">${renderers.escapeHtml(value)}<button class="filter-chip__remove" type="button" data-chip-field="${renderers.escapeHtml(field)}" data-chip-value="${renderers.escapeHtml(value)}" aria-label="Remove ${renderers.escapeHtml(value)} filter">×</button></span>`
+  ).join("");
+}
+
+function renderFilterControls() {
+  renderPrimaryOptions();
+  renderFacetOptions();
+  renderAppliedFilterChips();
 }
 
 function render() {
   renderActivityLog();
+  renderFilterControls();
   elements.resultCount.textContent = `${state.results.length} ${state.results.length === 1 ? "entry" : "entries"}`;
   if (state.loading) {
     elements.results.innerHTML = renderers.renderState("Searching directory...", "loading");
@@ -176,10 +265,10 @@ async function loadCategories() {
   logInteraction("Load taxonomy", {});
   const taxonomy = await api("/api/categories");
   state.categories = taxonomy.categories || [];
+  state.taxonomyFacets = taxonomy.facets || {};
+  state.states = taxonomy.states || [];
   logInteraction("Taxonomy loaded", { categories: state.categories.length });
-  elements.categoryFilter.innerHTML = '<option value="">All categories</option>' + state.categories
-    .map((item) => `<option value="${renderers.escapeHtml(item.category)}">${renderers.escapeHtml(item.category)}</option>`)
-    .join("");
+  renderFilterControls();
 }
 
 async function loadStats() {
@@ -194,8 +283,9 @@ async function runSearch() {
   logInteraction("Search started", {
     query: elements.searchInput.value || "(empty)",
     category: filters.category || "all",
-    tags: filters.tags,
-    location: filters.location || "any",
+    businessType: filters.businessType || "all",
+    state: filters.state || "all",
+    preferences: state.appliedPreferences,
     sort: elements.sortControl.value,
     mode: elements.modeControl.value
   });
@@ -205,6 +295,7 @@ async function runSearch() {
   try {
     const response = await api(searchUrl());
     state.results = response.results || [];
+    state.facets = response.facets || {};
     state.selectedId = state.results[0] ? state.results[0].id : null;
     state.detail = state.results[0] ? state.results[0].entry : null;
     logInteraction("Search completed", {
@@ -325,6 +416,29 @@ function switchView(view) {
   if (view === "admin") loadStats();
 }
 
+function clearDirectoryFilters() {
+  elements.categoryFilter.value = "";
+  elements.businessTypeFilter.value = "";
+  elements.stateFilter.value = "";
+  state.pendingPreferences = emptyPreferences();
+  state.appliedPreferences = emptyPreferences();
+}
+
+function removeAppliedFilter(field, value) {
+  if (PREFERENCE_FIELDS.includes(field)) {
+    state.pendingPreferences[field] = state.pendingPreferences[field].filter((item) => item !== value);
+    state.appliedPreferences[field] = state.appliedPreferences[field].filter((item) => item !== value);
+  } else if (field === "category") {
+    elements.categoryFilter.value = "";
+    elements.businessTypeFilter.value = "";
+  } else if (field === "businessType") {
+    elements.businessTypeFilter.value = "";
+  } else if (field === "state") {
+    elements.stateFilter.value = "";
+  }
+  runSearch();
+}
+
 elements.searchButton.addEventListener("click", () => {
   logInteraction("Search button clicked", {});
   runSearch();
@@ -335,16 +449,46 @@ elements.searchInput.addEventListener("input", debounce(() => {
 }, 250));
 elements.categoryFilter.addEventListener("change", () => {
   logInteraction("Category filter changed", { category: elements.categoryFilter.value || "all" });
+  renderPrimaryOptions();
   runSearch();
 });
-elements.tagFilter.addEventListener("input", debounce(() => {
-  logInteraction("Tag filter changed", { tags: getFilters().tags });
+elements.businessTypeFilter.addEventListener("change", () => {
+  logInteraction("Business type filter changed", { businessType: elements.businessTypeFilter.value || "all" });
   runSearch();
-}, 250));
-elements.locationFilter.addEventListener("input", debounce(() => {
-  logInteraction("Location filter changed", { location: elements.locationFilter.value || "any" });
+});
+elements.stateFilter.addEventListener("change", () => {
+  logInteraction("State filter changed", { state: elements.stateFilter.value || "all" });
   runSearch();
-}, 250));
+});
+elements.moreFiltersToggle.addEventListener("click", () => {
+  elements.moreFiltersPanel.hidden = !elements.moreFiltersPanel.hidden;
+  elements.moreFiltersToggle.setAttribute("aria-expanded", String(!elements.moreFiltersPanel.hidden));
+});
+elements.facetOptions.forEach((container) => container.addEventListener("change", (event) => {
+  const input = event.target;
+  if (!input || input.type !== "checkbox" || !PREFERENCE_FIELDS.includes(input.name)) return;
+  const selected = state.pendingPreferences[input.name];
+  state.pendingPreferences[input.name] = input.checked
+    ? [...new Set([...selected, input.value])]
+    : selected.filter((value) => value !== input.value);
+  renderFacetOptions();
+}));
+elements.applyFilters.addEventListener("click", () => {
+  state.appliedPreferences = copyPreferences(state.pendingPreferences);
+  logInteraction("Preference filters applied", { preferences: state.appliedPreferences });
+  runSearch();
+});
+elements.clearFilters.addEventListener("click", () => {
+  logInteraction("Filters cleared", {});
+  clearDirectoryFilters();
+  runSearch();
+});
+elements.appliedFilterChips.addEventListener("click", (event) => {
+  const button = event.target;
+  if (!button?.dataset?.chipField) return;
+  logInteraction("Applied filter removed", { field: button.dataset.chipField, value: button.dataset.chipValue });
+  removeAppliedFilter(button.dataset.chipField, button.dataset.chipValue);
+});
 elements.sortControl.addEventListener("change", () => {
   logInteraction("Sort changed", { sort: elements.sortControl.value });
   runSearch();
@@ -363,9 +507,7 @@ elements.agentInput.addEventListener("keydown", (event) => {
 elements.clearButton.addEventListener("click", () => {
   logInteraction("Search cleared", {});
   elements.searchInput.value = "";
-  elements.tagFilter.value = "";
-  elements.locationFilter.value = "";
-  elements.categoryFilter.value = "";
+  clearDirectoryFilters();
   elements.sortControl.value = "relevance";
   elements.modeControl.value = "keyword";
   state.agent = null;

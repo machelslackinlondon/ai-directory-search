@@ -2,6 +2,42 @@ const test = require("node:test");
 const assert = require("assert/strict");
 const renderers = require("../../public/renderers");
 const { close, createTestServer, request } = require("../helpers");
+const fs = require("fs");
+const path = require("path");
+const seed = require("../../src/data/seed-directory.json");
+
+test("result cards render safe relevance labels", () => {
+  const html = renderers.renderResultList([{
+    id: "atelier-north-architecture",
+    entry: seed.entries.find(({ id }) => id === "atelier-north-architecture"),
+    score: 12,
+    matchLabels: [
+      { facet: "rooms", value: "kitchen", label: "Kitchen" },
+      { facet: "styles", value: "modern", label: "<Modern>" }
+    ]
+  }]);
+
+  assert.match(html, /Kitchen/);
+  assert.match(html, /&lt;Modern&gt;/);
+  assert.doesNotMatch(html, /<Modern>/);
+});
+
+test("filter markup has canonical controls and accessible progressive disclosure", () => {
+  const html = fs.readFileSync(path.join(process.cwd(), "public", "index.html"), "utf8");
+
+  ["business-type-filter", "category-filter", "state-filter", "more-filters-toggle", "more-filters-panel", "apply-filters", "clear-filters"].forEach((id) => {
+    assert.match(html, new RegExp(`id=["']${id}["']`));
+  });
+  ["rooms", "projectTypes", "styles", "services"].forEach((facet) => {
+    assert.match(html, new RegExp(`data-facet-options=["']${facet}["']`));
+  });
+  assert.match(html, /aria-expanded=["']false["']/);
+  assert.match(html, /aria-controls=["']more-filters-panel["']/);
+  assert.match(html, /<section id=["']more-filters-panel["'] hidden>/);
+  assert.match(html, /<fieldset>/);
+  assert.match(html, /<legend>Rooms<\/legend>/);
+  assert.match(html, /id=["']result-count["'][^>]*aria-live=["']polite["']/);
+});
 
 test("user search flow renders results, detail, and no-result state", async () => {
   const { server, port } = await createTestServer();
