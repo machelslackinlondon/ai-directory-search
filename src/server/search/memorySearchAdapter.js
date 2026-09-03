@@ -219,7 +219,10 @@ function createMemorySearchAdapter(store, options = {}) {
       .filter((entry) => Object.entries(filters.metadata).every(([key, value]) =>
         normalizeText(flattenObject(entry.metadata && entry.metadata[key])).includes(normalizeText(value))
       ));
-    const facets = buildFacetCounts(primaryEntries, taxonomy);
+    const facetEntries = query
+      ? primaryEntries.filter((entry) => scoreEntry(entry, query, expanded).score > 0)
+      : primaryEntries;
+    const facets = buildFacetCounts(facetEntries, taxonomy);
 
     let results = primaryEntries
       .filter((entry) => entryMatchesAnyPreference(entry, filters))

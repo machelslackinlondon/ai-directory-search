@@ -33,3 +33,10 @@ test("returns structured labels only for selected values that matched", () => {
     { facet: "styles", value: "modern", label: "Modern" }
   ]);
 });
+
+test("uses canonical labels for case-insensitive preference matches", () => {
+  const atelier = seed.entries.find(({ id }) => id === "atelier-north-architecture");
+  assert.deepEqual(buildMatchLabels(atelier, { styles: ["modern"] }), [
+    { facet: "styles", value: "modern", label: "Modern" }
+  ]);
+});

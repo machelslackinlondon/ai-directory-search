@@ -69,3 +69,13 @@ test("preference matches use OR, boost additional matches, and expose baseline c
   assert.ok(response.facets.rooms.some(({ label, count }) => label === "Kitchen" && count > 0));
   assert.equal(response.backend, "memory");
 });
+
+test("facet counts use free-text candidates before preference exclusion", async () => {
+  const { searchAdapter } = createTestContext();
+  const response = await searchAdapter.search({
+    query: "kitchen",
+    filters: { styles: ["Modern"] }
+  });
+  const newBuild = response.facets.projectTypes.find(({ label }) => label === "New Build");
+  assert.equal(newBuild.count, 1);
+});

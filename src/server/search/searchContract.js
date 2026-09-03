@@ -46,7 +46,10 @@ function entryMatchesAnyPreference(entry, filters) {
 function buildMatchLabels(entry, filters) {
   return selectedPreferences(filters)
     .filter(({ facet, label }) => entryValues(entry, facet).some((value) => normalizeText(value) === normalizeText(label)))
-    .map(({ facet, label }) => ({ facet, value: normalizeText(label).replace(/\s+/g, "-"), label }));
+    .map(({ facet, label }) => {
+      const canonicalLabel = (DESIGN_FACETS[facet] || []).find((value) => normalizeText(value) === normalizeText(label)) || label;
+      return { facet, value: normalizeText(canonicalLabel).replace(/\s+/g, "-"), label: canonicalLabel };
+    });
 }
 
 function entryScalar(entry, field) {
