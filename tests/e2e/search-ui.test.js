@@ -5,6 +5,7 @@ const { close, createTestServer, request } = require("../helpers");
 const fs = require("fs");
 const path = require("path");
 const seed = require("../../src/data/seed-directory.json");
+const { validateDirectoryPayload } = require("../../src/server/directory/schema");
 
 test("result cards render safe relevance labels", () => {
   const html = renderers.renderResultList([{
@@ -37,6 +38,21 @@ test("filter markup has canonical controls and accessible progressive disclosure
   assert.match(html, /<fieldset>/);
   assert.match(html, /<legend>Rooms<\/legend>/);
   assert.match(html, /id=["']result-count["'][^>]*aria-live=["']polite["']/);
+});
+
+test("collapsed More Filters stays hidden despite its grid layout", () => {
+  const styles = fs.readFileSync(path.join(process.cwd(), "public", "styles.css"), "utf8");
+
+  assert.match(styles, /#more-filters-panel\[hidden\]\s*{[^}]*display:\s*none/);
+});
+
+test("admin import placeholder is a valid design-professional payload", () => {
+  const html = fs.readFileSync(path.join(process.cwd(), "public", "index.html"), "utf8");
+  const placeholder = html.match(/id=["']import-content["'][^>]*placeholder='([^']+)'/)?.[1];
+
+  assert.ok(placeholder);
+  const result = validateDirectoryPayload(JSON.parse(placeholder));
+  assert.equal(result.ok, true, result.errors.join(" "));
 });
 
 test("user search flow renders results, detail, and no-result state", async () => {

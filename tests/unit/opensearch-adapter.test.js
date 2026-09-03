@@ -78,6 +78,24 @@ function makeClientDouble(calls, options = {}) {
     }]));
   }
 
+  function templateBody() {
+    if (options.templateMissing) return { index_templates: [] };
+    return {
+      index_templates: [{
+        name: TEMPLATE_NAME,
+        index_template: {
+          index_patterns: options.templateIndexPatterns || INDEX_TEMPLATE.index_patterns,
+          template: {
+            mappings: {
+              dynamic: options.templateMappingDynamic ?? "strict",
+              _meta: { schema_version: options.templateSchemaVersion ?? 1 }
+            }
+          }
+        }
+      }]
+    };
+  }
+
   const client = {
     cluster: {
       health: record("cluster.health", () => {
@@ -97,7 +115,8 @@ function makeClientDouble(calls, options = {}) {
       }),
       getAlias: record("indices.getAlias", response(aliasesBody())),
       updateAliases: record("indices.updateAliases", response({ acknowledged: true })),
-      getMapping: record("indices.getMapping", (args) => response(mappingsBody(args)))
+      getMapping: record("indices.getMapping", (args) => response(mappingsBody(args))),
+      getIndexTemplate: record("indices.getIndexTemplate", response(templateBody()))
     },
     helpers: {
       bulk: record("helpers.bulk", async (args) => {
@@ -586,6 +605,47 @@ test("stats and verify expose index state without credentials", async () => {
   });
   assert.equal(verified.verified, true);
   assert.equal(JSON.stringify({ stats, verified }).includes("stats-must-hide-me"), false);
+});
+
+test("verify checks the named index template and effective strict mapping", async () => {
+  const calls = [];
+  const adapter = createOpenSearchSearchAdapter(store, {
+    client: makeClientDouble(calls, { aliasExists: true })
+  });
+
+  const verified = await adapter.verify();
+
+  assert.deepEqual(calls.find(({ method }) => method === "indices.getIndexTemplate").args, {
+    name: TEMPLATE_NAME
+  });
+  assert.equal(calls.filter(({ method }) => method === "indices.getMapping").length, 2);
+  assert.equal(verified.template, TEMPLATE_NAME);
+  assert.equal(verified.mappingDynamic, "strict");
+});
+
+test("verify rejects a missing or incompatible index template", async (t) => {
+  for (const scenario of [
+    { name: "missing template", options: { templateMissing: true } },
+    { name: "wrong index pattern", options: { templateIndexPatterns: ["other-index-*"] } },
+    { name: "non-strict template mapping", options: { templateMappingDynamic: true } },
+    { name: "wrong template schema", options: { templateSchemaVersion: 2 } }
+  ]) {
+    await t.test(scenario.name, async () => {
+      const adapter = createOpenSearchSearchAdapter(store, {
+        client: makeClientDouble([], { aliasExists: true, ...scenario.options })
+      });
+
+      await assert.rejects(adapter.verify(), (error) => error.code === "OPENSEARCH_TEMPLATE_MISMATCH");
+    });
+  }
+});
+
+test("verify rejects a non-strict effective index mapping", async () => {
+  const adapter = createOpenSearchSearchAdapter(store, {
+    client: makeClientDouble([], { aliasExists: true, mappingDynamic: true })
+  });
+
+  await assert.rejects(adapter.verify(), (error) => error.code === "OPENSEARCH_SCHEMA_MISMATCH");
 });
 
 test("verify rejects aliases with the wrong target count, schema, or document count", async () => {

@@ -1,6 +1,14 @@
 function formatStartupSearchStats(stats) {
   const backend = stats.backend || stats.adapter;
-  const entries = stats.entries ?? stats.memory?.entries ?? stats.opensearch?.entries;
+  if (stats.adapter === "fallback" && stats.opensearch?.available === false) {
+    return `OpenSearch unavailable; ${stats.memory?.entries ?? "unknown"} entries ready in memory fallback.`;
+  }
+  const activeState = backend === "opensearch"
+    ? stats.opensearch
+    : backend === "memory"
+      ? stats.memory
+      : stats;
+  const entries = activeState?.entries ?? stats.entries ?? "unknown";
   return `Loaded ${entries} entries with ${backend} index.`;
 }
 

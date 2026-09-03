@@ -207,6 +207,10 @@ h2 {
   padding: 18px 2px 2px;
 }
 
+#more-filters-panel[hidden] {
+  display: none;
+}
+
 .facet-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

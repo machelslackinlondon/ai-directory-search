@@ -3,6 +3,7 @@ const { toSearchDocument } = require("./opensearch/document");
 const {
   ANALYZE_CASES,
   DEFAULT_INDEX_ALIAS,
+  INDEX_PATTERN,
   INDEX_TEMPLATE,
   SCHEMA_VERSION,
   TEMPLATE_NAME,
@@ -126,6 +127,27 @@ function createOpenSearchSearchAdapter(store, options = {}) {
         `OpenSearch index ${physicalIndex} does not use the required schema`
       );
     }
+  }
+
+  async function verifyIndexTemplate() {
+    const result = bodyOf(await client.indices.getIndexTemplate({ name: TEMPLATE_NAME })) || {};
+    const template = (result.index_templates || [])
+      .find(({ name }) => name === TEMPLATE_NAME)?.index_template;
+    const mappings = template?.template?.mappings;
+    const usesExpectedPattern = Array.isArray(template?.index_patterns)
+      && template.index_patterns.includes(INDEX_PATTERN);
+    if (
+      !template
+      || !usesExpectedPattern
+      || mappings?.dynamic !== "strict"
+      || mappings?._meta?.schema_version !== SCHEMA_VERSION
+    ) {
+      throw operationError(
+        "OPENSEARCH_TEMPLATE_MISMATCH",
+        `OpenSearch index template ${TEMPLATE_NAME} does not use the required schema`
+      );
+    }
+    return TEMPLATE_NAME;
   }
 
   async function bootstrap() {
@@ -290,6 +312,8 @@ function createOpenSearchSearchAdapter(store, options = {}) {
         `OpenSearch schema version is ${state.schemaVersion}; expected ${SCHEMA_VERSION}`
       );
     }
+    const template = await verifyIndexTemplate();
+    await verifyMapping(state.physicalIndexes[0]);
     const expected = store.listEntries().length;
     if (state.entries !== expected) {
       throw operationError(
@@ -297,7 +321,7 @@ function createOpenSearchSearchAdapter(store, options = {}) {
         `OpenSearch alias ${alias} contains ${state.entries} documents; expected ${expected}`
       );
     }
-    return { ...state, verified: true };
+    return { ...state, template, mappingDynamic: "strict", verified: true };
   }
 
   async function waitForReady() {
