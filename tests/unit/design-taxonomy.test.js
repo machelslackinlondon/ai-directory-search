@@ -6,6 +6,7 @@ const {
   businessTypeBelongsToCategory,
   canonicalizeControlledValue
 } = require("../../src/server/directory/designTaxonomy");
+const { normalizeTaxonomy } = require("../../src/server/directory/taxonomy");
 
 test("exposes only the three approved design categories", () => {
   assert.deepEqual(DESIGN_CATEGORIES.map(({ category }) => category), [
@@ -22,4 +23,12 @@ test("validates business types against their parent category", () => {
 
 test("canonicalizes case and accent variations without changing display labels", () => {
   assert.equal(canonicalizeControlledValue(DESIGN_FACETS.services, " full-SERVICE design "), "Full-service Design");
+});
+
+test("uses approved categories when no taxonomy categories are supplied", () => {
+  assert.deepEqual(normalizeTaxonomy({}).categories.map(({ category }) => category), [
+    "Architecture",
+    "Interior Design + Decor",
+    "Outdoor + Garden Design"
+  ]);
 });
