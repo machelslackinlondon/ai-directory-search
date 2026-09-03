@@ -35,12 +35,18 @@ test("secured health commands quote credentials and whitelist meaningful Dashboa
   assert.match(healthCommands[1], /401/);
   assert.doesNotMatch(healthCommands[1], /curl -sS -o \/dev\/null http:\/\/localhost:5601/);
 
-  const allowlistMatch = /case \\"\$\$status\\" in ([0-9|]+)\)/.exec(healthCommands[1]);
-  assert.ok(allowlistMatch);
-  const allowlist = allowlistMatch[1].split("|").map(Number);
+  const completeGate = /case \\"\$\$status\\" in ([0-9|]+)\) exit 0 ;; \*\) exit 1 ;; esac$/;
+  const completeGateMatch = completeGate.exec(healthCommands[1]);
+  assert.ok(completeGateMatch);
+  const allowlist = completeGateMatch[1].split("|").map(Number);
   assert.deepEqual(allowlist, [200, 401]);
   assert.equal(allowlist.includes(500), false);
   assert.equal(allowlist.includes(503), false);
+
+  const laterSuccess = healthCommands[1].replace("*) exit 1", "500|503) exit 0 ;; *) exit 1");
+  const wildcardSuccess = healthCommands[1].replace("*) exit 1", "*) exit 0");
+  assert.equal(completeGate.test(laterSuccess), false);
+  assert.equal(completeGate.test(wildcardSuccess), false);
 });
 
 test("operations commands validate Compose before startup and keep live tests opt-in", () => {
