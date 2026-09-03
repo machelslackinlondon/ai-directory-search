@@ -20,6 +20,8 @@ const state = {
   pendingPreferences: emptyPreferences(),
   appliedPreferences: emptyPreferences(),
   facets: {},
+  knownStates: [],
+  searchRequestId: 0,
   loading: false,
   error: null,
   view: "search"
@@ -178,7 +180,7 @@ function renderPrimaryOptions() {
   const businessTypes = selectedCategory
     ? (categories.find((item) => item.category === selectedCategory)?.subcategories || [])
     : categories.flatMap((item) => item.subcategories || []);
-  const states = state.facets.state || state.states || [];
+  const states = [...new Set([...state.knownStates, selectedState].filter(Boolean))];
 
   elements.categoryFilter.innerHTML = '<option value="">All categories</option>' + categories
     .map((item) => `<option value="${renderers.escapeHtml(item.category)}">${renderers.escapeHtml(item.category)}</option>`)
@@ -266,7 +268,7 @@ async function loadCategories() {
   const taxonomy = await api("/api/categories");
   state.categories = taxonomy.categories || [];
   state.taxonomyFacets = taxonomy.facets || {};
-  state.states = taxonomy.states || [];
+  state.knownStates = [...new Set([...state.knownStates, ...(taxonomy.states || [])])];
   logInteraction("Taxonomy loaded", { categories: state.categories.length });
   renderFilterControls();
 }
@@ -279,6 +281,7 @@ async function loadStats() {
 }
 
 async function runSearch() {
+  const requestId = ++state.searchRequestId;
   const filters = getFilters();
   logInteraction("Search started", {
     query: elements.searchInput.value || "(empty)",
@@ -294,8 +297,13 @@ async function runSearch() {
   render();
   try {
     const response = await api(searchUrl());
+    if (requestId !== state.searchRequestId) return;
     state.results = response.results || [];
     state.facets = response.facets || {};
+    state.knownStates = [...new Set([
+      ...state.knownStates,
+      ...(state.facets.state || []).map((item) => typeof item === "string" ? item : item.label)
+    ])];
     state.selectedId = state.results[0] ? state.results[0].id : null;
     state.detail = state.results[0] ? state.results[0].entry : null;
     logInteraction("Search completed", {
@@ -304,11 +312,13 @@ async function runSearch() {
       tookMs: response.tookMs
     }, state.results.length ? "success" : "warn");
   } catch (error) {
+    if (requestId !== state.searchRequestId) return;
     state.error = error.message;
     state.results = [];
     state.detail = null;
     logInteraction("Search failed", { error: error.message }, "error");
   } finally {
+    if (requestId !== state.searchRequestId) return;
     state.loading = false;
     render();
   }

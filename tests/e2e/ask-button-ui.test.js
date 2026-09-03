@@ -9,7 +9,7 @@ class FakeElement {
   constructor(selector) {
     this.selector = selector;
     this.value = "";
-    this.innerHTML = "";
+    this._innerHTML = "";
     this.textContent = "";
     this.disabled = false;
     this.dataset = {};
@@ -18,6 +18,17 @@ class FakeElement {
     this.classList = {
       toggle: () => {}
     };
+  }
+
+  get innerHTML() {
+    return this._innerHTML;
+  }
+
+  set innerHTML(value) {
+    this._innerHTML = value;
+    if (!this.selector.endsWith("-filter") && !["#sort-control", "#mode-control"].includes(this.selector)) return;
+    const optionValues = [...String(value).matchAll(/<option value="([^"]*)"/g)].map((match) => match[1]);
+    if (optionValues.length > 0 && !optionValues.includes(this.value)) this.value = "";
   }
 
   addEventListener(type, handler) {
@@ -97,6 +108,22 @@ function createFakeDocument() {
 
 function tick() {
   return new Promise((resolve) => setImmediate(resolve));
+}
+
+async function settle() {
+  await tick();
+  await tick();
+  await tick();
+}
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
 }
 
 test("Ask button renders an inline grounded answer", async () => {
@@ -234,4 +261,88 @@ test("preference filters wait for Apply, show facet counts, and keep primary fil
   const clearedSearchRequest = requests.filter(({ url }) => String(url).startsWith("/api/search")).at(-1);
   assert.doesNotMatch(clearedSearchRequest.url, /rooms=|styles=/);
   assert.equal(document.elements["#applied-filter-chips"].innerHTML, "");
+});
+
+test("state selection and chip survive a zero-result facet response", async () => {
+  const document = createFakeDocument();
+  const appJs = fs.readFileSync(path.join(process.cwd(), "public", "app.js"), "utf8");
+  const searchResponses = [
+    { results: [], facets: { state: [{ label: "California", count: 1 }] } },
+    { results: [], facets: { state: [] } }
+  ];
+  const context = {
+    console: { info: () => {} },
+    document,
+    setTimeout,
+    clearTimeout,
+    URLSearchParams,
+    window: { DirectoryRenderers: renderers },
+    fetch: async (url) => {
+      if (url === "/api/categories") return { ok: true, json: async () => ({ categories: [], facets: {}, states: ["California"] }) };
+      if (String(url).startsWith("/api/search")) return { ok: true, json: async () => searchResponses.shift() };
+      if (url === "/api/stats") return { ok: true, json: async () => ({ entries: 0 }) };
+      throw new Error(`Unexpected URL ${url}`);
+    }
+  };
+
+  vm.runInNewContext(appJs, context, { filename: "public/app.js" });
+  await settle();
+  document.elements["#state-filter"].value = "California";
+  await document.elements["#state-filter"].dispatch("change");
+  await settle();
+
+  assert.equal(document.elements["#state-filter"].value, "California");
+  assert.match(document.elements["#state-filter"].innerHTML, /California/);
+  assert.match(document.elements["#applied-filter-chips"].innerHTML, /California/);
+});
+
+test("only the latest search response controls results, errors, and loading state", async () => {
+  const document = createFakeDocument();
+  const appJs = fs.readFileSync(path.join(process.cwd(), "public", "app.js"), "utf8");
+  const older = deferred();
+  const newer = deferred();
+  let searchCalls = 0;
+  const context = {
+    console: { info: () => {} },
+    document,
+    setTimeout,
+    clearTimeout,
+    URLSearchParams,
+    window: { DirectoryRenderers: renderers },
+    fetch: async (url) => {
+      if (url === "/api/categories") return { ok: true, json: async () => ({ categories: [], facets: {} }) };
+      if (url === "/api/stats") return { ok: true, json: async () => ({ entries: 0 }) };
+      if (String(url).startsWith("/api/search")) {
+        searchCalls += 1;
+        if (searchCalls === 1) return { ok: true, json: async () => ({ results: [], facets: {} }) };
+        return searchCalls === 2 ? older.promise : newer.promise;
+      }
+      throw new Error(`Unexpected URL ${url}`);
+    }
+  };
+
+  vm.runInNewContext(appJs, context, { filename: "public/app.js" });
+  await settle();
+  document.elements["#search-input"].value = "older search";
+  await document.elements["#search-button"].dispatch("click");
+  document.elements["#search-input"].value = "newer search";
+  await document.elements["#search-button"].dispatch("click");
+  assert.match(document.elements["#results"].innerHTML, /Searching directory/);
+
+  newer.resolve({
+    ok: true,
+    json: async () => ({
+      results: [{ id: "newer", entry: { id: "newer", name: "Newer result", category: "Architecture", description: "Newest response.", tags: [] } }],
+      facets: { styles: [{ label: "Modern", count: 1 }] }
+    })
+  });
+  await settle();
+  assert.match(document.elements["#results"].innerHTML, /Newer result/);
+  assert.doesNotMatch(document.elements["#results"].innerHTML, /Searching directory|older failure/);
+
+  older.reject(new Error("older failure"));
+  await settle();
+  assert.match(document.elements["#results"].innerHTML, /Newer result/);
+  assert.doesNotMatch(document.elements["#results"].innerHTML, /Searching directory|older failure/);
+  assert.equal(document.elements["#result-count"].textContent, "1 entry");
 });
