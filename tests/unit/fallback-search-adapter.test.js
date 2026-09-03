@@ -24,6 +24,14 @@ function errorWithStatus(statusCode) {
   return Object.assign(new Error(`status ${statusCode}`), { statusCode });
 }
 
+function deferred() {
+  let resolve;
+  const promise = new Promise((nextResolve) => {
+    resolve = nextResolve;
+  });
+  return { promise, resolve };
+}
+
 test("classifies only documented OpenSearch outages as recoverable", () => {
   for (const error of [
     Object.assign(new Error("refused"), { code: "ECONNREFUSED" }),
@@ -152,6 +160,76 @@ test("stats preserves a safe non-recoverable primary error code", async () => {
   assert.deepEqual(stats.opensearch, { available: false, errorCode: "OPENSEARCH_AUTHENTICATION_FAILED" });
 });
 
+test("stats normalizes status-only client errors without retaining raw details", async (t) => {
+  const cases = [
+    [400, "OPENSEARCH_BAD_REQUEST"],
+    [401, "OPENSEARCH_AUTHENTICATION_FAILED"],
+    [403, "OPENSEARCH_AUTHORIZATION_FAILED"]
+  ];
+  for (const [statusCode, expectedCode] of cases) {
+    await t.test(String(statusCode), async () => {
+      const secret = `status-${statusCode}-must-not-leak`;
+      const adapter = createFallbackSearchAdapter(
+        makeAdapter({ async stats() { throw Object.assign(new Error(secret), { meta: { body: { status: statusCode } } }); } }),
+        makeAdapter()
+      );
+
+      const stats = await adapter.stats();
+
+      assert.deepEqual(stats.opensearch, { available: false, errorCode: expectedCode });
+      assert.equal(JSON.stringify(stats).includes(secret), false);
+    });
+  }
+});
+
+test("only one request performs a half-open probe after cooldown expiry", async () => {
+  let now = 0;
+  let primaryCalls = 0;
+  const probe = deferred();
+  const memoryQueries = [];
+  const adapter = createFallbackSearchAdapter(
+    makeAdapter({
+      async search(params) {
+        primaryCalls += 1;
+        if (primaryCalls === 1) throw Object.assign(new Error("unavailable"), { code: "ECONNREFUSED" });
+        await probe.promise;
+        return { backend: "opensearch", fallback: false, fallbackReason: null, query: params.query, results: [], total: 0 };
+      }
+    }),
+    makeAdapter({
+      async search(params) {
+        memoryQueries.push(params.query);
+        return { backend: "memory", fallback: false, fallbackReason: null, query: params.query, results: [], total: 0 };
+      }
+    }),
+    { now: () => now, cooldownMs: 100 }
+  );
+
+  await adapter.search({ query: "opens-cooldown" });
+  now = 100;
+  const primaryProbe = adapter.search({ query: "probe-query" });
+  await new Promise((resolve) => setImmediate(resolve));
+  const concurrentMemoryPromise = adapter.search({ query: "memory-query" });
+  await new Promise((resolve) => setImmediate(resolve));
+  const primaryCallsDuringProbe = primaryCalls;
+  const duringProbe = await adapter.stats();
+  probe.resolve();
+  const [recovered, concurrentMemory] = await Promise.all([primaryProbe, concurrentMemoryPromise]);
+
+  assert.equal(primaryCallsDuringProbe, 2);
+  assert.deepEqual(memoryQueries, ["opens-cooldown", "memory-query"]);
+  assert.deepEqual(
+    { backend: concurrentMemory.backend, fallback: concurrentMemory.fallback, fallbackReason: concurrentMemory.fallbackReason, query: concurrentMemory.query },
+    { backend: "memory", fallback: true, fallbackReason: "OPENSEARCH_COOLDOWN", query: "memory-query" }
+  );
+  assert.deepEqual(duringProbe.cooldown, { active: true, probing: true, unavailableUntil: 100, remainingMs: 0 });
+
+  const afterRecovery = await adapter.stats();
+  assert.equal(recovered.backend, "opensearch");
+  assert.equal(recovered.query, "probe-query");
+  assert.deepEqual(afterRecovery.cooldown, { active: false, unavailableUntil: null, remainingMs: 0 });
+});
+
 test("composition defaults to fallback OpenSearch and permits explicit memory tests", async () => {
   const store = createMemoryDirectoryStore({ entries: [] });
   const memory = makeAdapter({ name: "memory" });
@@ -179,6 +257,28 @@ test("closing a fallback adapter closes each distinct adapter once", async () =>
 
   await adapter.close();
 
+  assert.equal(primaryClosed, 1);
+  assert.equal(memoryClosed, 1);
+});
+
+test("closing a fallback adapter reports all close failures without secrets", async () => {
+  const primarySecret = "primary-close-secret";
+  const memorySecret = "memory-close-secret";
+  let primaryClosed = 0;
+  let memoryClosed = 0;
+  const adapter = createFallbackSearchAdapter(
+    makeAdapter({ async close() { primaryClosed += 1; throw new Error(primarySecret); } }),
+    makeAdapter({ async close() { memoryClosed += 1; throw new Error(memorySecret); } })
+  );
+
+  await assert.rejects(adapter.close(), (error) => {
+    assert.equal(error.code, "SEARCH_ADAPTER_CLOSE_FAILED");
+    assert.equal(error.failureCount, 2);
+    assert.match(error.message, /2 search adapter/);
+    assert.equal(JSON.stringify({ error: { message: error.message, ...error } }).includes(primarySecret), false);
+    assert.equal(JSON.stringify({ error: { message: error.message, ...error } }).includes(memorySecret), false);
+    return true;
+  });
   assert.equal(primaryClosed, 1);
   assert.equal(memoryClosed, 1);
 });

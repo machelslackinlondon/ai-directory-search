@@ -14,5 +14,14 @@ server.listen(port, host, async () => {
   }
 });
 
-process.on("SIGTERM", () => server.close());
-process.on("SIGINT", () => server.close());
+function shutdown(signal) {
+  server.close((error) => {
+    if (!error) return;
+    process.exitCode = 1;
+    const failureCount = Number.isInteger(error.failureCount) ? ` (${error.failureCount} adapter failure${error.failureCount === 1 ? "" : "s"})` : "";
+    console.error(`Graceful shutdown failed after ${signal}: ${error.code || "SERVER_CLOSE_FAILED"}${failureCount}`);
+  });
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

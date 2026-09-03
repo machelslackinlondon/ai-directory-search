@@ -1,6 +1,13 @@
 const test = require("node:test");
 const assert = require("assert/strict");
 const { close, createTestServer, request } = require("../helpers");
+const { createMemoryDirectoryStore } = require("../../src/server/directory/store");
+const { createFallbackSearchAdapter } = require("../../src/server/search/fallbackSearchAdapter");
+const { createAppServer } = require("../../src/server/http");
+
+function listenForCloseTest(server) {
+  return new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+}
 
 test("search API returns ranked records with match explanations", async () => {
   const { server, port } = await createTestServer();
@@ -86,4 +93,56 @@ test("static app is served as first screen", async () => {
   } finally {
     await close(server);
   }
+});
+
+test("server close waits for adapter cleanup before completing", async () => {
+  let releaseClose;
+  const closeStarted = new Promise((resolve) => {
+    releaseClose = resolve;
+  });
+  let primaryClosed = 0;
+  let memoryClosed = 0;
+  const searchAdapter = createFallbackSearchAdapter(
+    { async close() { primaryClosed += 1; await closeStarted; } },
+    { async close() { memoryClosed += 1; } }
+  );
+  const server = createAppServer({
+    store: createMemoryDirectoryStore({ entries: [] }),
+    searchAdapter
+  });
+  await listenForCloseTest(server);
+
+  let callbackCalled = false;
+  const completion = new Promise((resolve) => server.close((error) => {
+    callbackCalled = true;
+    resolve(error);
+  }));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(callbackCalled, false);
+
+  releaseClose();
+  assert.equal(await completion, undefined);
+  assert.equal(primaryClosed, 1);
+  assert.equal(memoryClosed, 1);
+});
+
+test("server close reports one safe aggregate adapter cleanup failure", async () => {
+  const primarySecret = "server-primary-close-secret";
+  const memorySecret = "server-memory-close-secret";
+  const searchAdapter = createFallbackSearchAdapter(
+    { async close() { throw new Error(primarySecret); } },
+    { async close() { throw new Error(memorySecret); } }
+  );
+  const server = createAppServer({
+    store: createMemoryDirectoryStore({ entries: [] }),
+    searchAdapter
+  });
+  await listenForCloseTest(server);
+
+  const error = await new Promise((resolve) => server.close(resolve));
+
+  assert.equal(error.code, "SEARCH_ADAPTER_CLOSE_FAILED");
+  assert.equal(error.failureCount, 2);
+  assert.equal(JSON.stringify({ message: error.message, ...error }).includes(primarySecret), false);
+  assert.equal(JSON.stringify({ message: error.message, ...error }).includes(memorySecret), false);
 });

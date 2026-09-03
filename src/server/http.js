@@ -222,10 +222,36 @@ function createAppServer(options = {}) {
     }
   });
 
+  const nativeClose = server.close.bind(server);
+  let adapterClosePromise;
+
+  function closeAdapterOnce() {
+    if (!adapterClosePromise) {
+      adapterClosePromise = Promise.resolve().then(async () => {
+        if (typeof context.searchAdapter.close === "function") await context.searchAdapter.close();
+      });
+    }
+    return adapterClosePromise;
+  }
+
+  server.close = function close(callback) {
+    const complete = (serverError) => {
+      closeAdapterOnce().then(
+        () => callback?.(serverError),
+        (adapterError) => {
+          server.shutdownError = adapterError;
+          callback?.(serverError || adapterError);
+        }
+      );
+    };
+    try {
+      return nativeClose(complete);
+    } catch (error) {
+      complete(error);
+      return server;
+    }
+  };
   server.context = context;
-  server.on("close", () => {
-    Promise.resolve(context.searchAdapter.close?.()).catch(() => {});
-  });
   return server;
 }
 

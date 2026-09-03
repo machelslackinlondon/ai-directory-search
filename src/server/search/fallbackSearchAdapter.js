@@ -23,7 +23,12 @@ function stableReasonCode(error) {
 
 function safeErrorCode(error) {
   if (typeof error?.code === "string" && /^[A-Z0-9_]+$/.test(error.code)) return error.code;
-  return stableReasonCode(error);
+  const statusCode = statusCodeOf(error);
+  if (statusCode === 400) return "OPENSEARCH_BAD_REQUEST";
+  if (statusCode === 401) return "OPENSEARCH_AUTHENTICATION_FAILED";
+  if (statusCode === 403) return "OPENSEARCH_AUTHORIZATION_FAILED";
+  if (RECOVERABLE_STATUS.has(statusCode)) return "OPENSEARCH_UNAVAILABLE";
+  return "OPENSEARCH_REQUEST_FAILED";
 }
 
 function asTimestamp(value) {
@@ -37,6 +42,7 @@ function createFallbackSearchAdapter(primary, memory, options = {}) {
     : 30_000;
   let unavailableUntil = null;
   let lastRecoverableFailure = null;
+  let primaryProbeInFlight = false;
 
   function currentTime() {
     return asTimestamp(now());
@@ -69,10 +75,12 @@ function createFallbackSearchAdapter(primary, memory, options = {}) {
   }
 
   async function callWithFallback(method, args = [], includeMetadata = false) {
-    if (coolingDown()) {
+    if (coolingDown() || primaryProbeInFlight) {
       return callMemory(method, args, "OPENSEARCH_COOLDOWN", includeMetadata);
     }
 
+    const isHalfOpenProbe = unavailableUntil != null;
+    if (isHalfOpenProbe) primaryProbeInFlight = true;
     try {
       const result = await primary[method](...args);
       recordRecovery();
@@ -86,6 +94,8 @@ function createFallbackSearchAdapter(primary, memory, options = {}) {
     } catch (error) {
       if (!isRecoverableOpenSearchError(error)) throw error;
       return callMemory(method, args, recordFailure(error), includeMetadata);
+    } finally {
+      if (isHalfOpenProbe) primaryProbeInFlight = false;
     }
   }
 
@@ -120,7 +130,7 @@ function createFallbackSearchAdapter(primary, memory, options = {}) {
       openSearchState = { available: false, errorCode: safeErrorCode(error) };
     }
     const timestamp = currentTime();
-    const active = unavailableUntil != null && timestamp < unavailableUntil;
+    const active = (unavailableUntil != null && timestamp < unavailableUntil) || primaryProbeInFlight;
     return {
       adapter: "fallback",
       backend: active ? "memory" : "opensearch",
@@ -130,6 +140,7 @@ function createFallbackSearchAdapter(primary, memory, options = {}) {
       opensearch: openSearchState,
       cooldown: {
         active,
+        ...(primaryProbeInFlight ? { probing: true } : {}),
         unavailableUntil,
         remainingMs: active ? unavailableUntil - timestamp : 0
       }
@@ -142,7 +153,13 @@ function createFallbackSearchAdapter(primary, memory, options = {}) {
       typeof adapter.close === "function" ? adapter.close() : undefined
     )));
     const failed = results.find((result) => result.status === "rejected");
-    if (failed) throw failed.reason;
+    if (failed) {
+      const failureCount = results.filter((result) => result.status === "rejected").length;
+      const error = new Error(`Failed to close ${failureCount} search adapter${failureCount === 1 ? "" : "s"}.`);
+      error.code = "SEARCH_ADAPTER_CLOSE_FAILED";
+      error.failureCount = failureCount;
+      throw error;
+    }
   }
 
   return {
