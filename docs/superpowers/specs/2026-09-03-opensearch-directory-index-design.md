@@ -5,7 +5,7 @@
 
 ## Summary
 
-The project will use OpenSearch as its primary search engine and retain the in-memory adapter as an automatic availability fallback. The file-backed directory store remains the canonical data source. OpenSearch is a derived, versioned read index that supports free-text search, three primary filters, four relevance-aware multi-select groups, facet counts, and match labels.
+The project will use OpenSearch as its primary search engine and retain the in-memory adapter as an automatic availability fallback. The file-backed directory store remains the canonical data source. OpenSearch is a derived, versioned read index that supports a BM25 lexical ranking stack with synonyms, aliases, bounded fuzzy matching, and autocomplete, plus three primary filters, four relevance-aware multi-select groups, facet counts, and match labels.
 
 The implementation will replace the generic sample taxonomy with a design-professional taxonomy inspired by the AD PRO Directory while using project-owned example records. Local development will include matching OpenSearch and OpenSearch Dashboards 3.8.0 containers, secure demo configuration, bootstrap and reindex commands, and end-to-end onboarding instructions.
 
@@ -15,6 +15,7 @@ The implementation will replace the generic sample taxonomy with a design-profes
 - Fall back transparently to the memory adapter during recoverable OpenSearch availability failures.
 - Install mappings and analysis settings before any profile documents are indexed.
 - Support free-text relevance across profile names, descriptions, taxonomy, and controlled attributes.
+- Make BM25, search-time synonyms, indexed aliases, bounded fuzzy matching, and name/alias autocomplete explicit and independently testable relevance signals.
 - Preserve three primary filters: Category, Business Type, and State.
 - Support Rooms, Project Types, Styles, and Services as OR-based multi-select filters and relevance signals.
 - Return per-profile labels explaining which selected options matched.
@@ -163,10 +164,10 @@ The derived document contains indexable flat fields plus the canonical profile p
 | `state` | normalized `keyword` with a `search` text subfield | Exact primary filter plus location matching |
 | `city` | normalized `keyword` with a `search` text subfield | Location search and optional aggregation |
 | `tags` | normalized `keyword` with a `search` text subfield | Exact attributes plus free-text relevance |
-| `rooms` | normalized `keyword` | Multi-select exact preference matching |
-| `projectTypes` | normalized `keyword` | Multi-select exact preference matching |
-| `styles` | normalized `keyword` | Multi-select exact preference matching |
-| `services` | normalized `keyword` | Multi-select exact preference matching |
+| `rooms` | normalized `keyword` with a `search` text subfield | Multi-select exact preference matching plus free-text discovery |
+| `projectTypes` | normalized `keyword` with a `search` text subfield | Multi-select exact preference matching plus free-text discovery |
+| `styles` | normalized `keyword` with a `search` text subfield | Multi-select exact preference matching plus free-text discovery |
+| `services` | normalized `keyword` with a `search` text subfield | Multi-select exact preference matching plus free-text discovery |
 | `aliases` | `text` with an `autocomplete` subfield | Alternate-name and partial-name search |
 | `synonyms` | `text` | Profile-specific recall terms |
 | `relatedTerms` | `text` | Lower-weight discovery terms |
@@ -176,6 +177,10 @@ The derived document contains indexable flat fields plus the canonical profile p
 The top-level mapping uses `dynamic: strict`. Arbitrary metadata is available only inside the non-indexed `profile` payload, preventing mapping explosion.
 
 ## Analysis Settings
+
+### BM25 similarity
+
+The index explicitly configures OpenSearch 3.8's native BM25 similarity as the default lexical scorer with `k1: 1.2`, `b: 0.75`, and `discount_overlaps: true`. These documented defaults balance diminishing term-frequency gains, field-length normalization, and synonym-token overlap handling. Declaring them in the versioned index settings makes the ranking contract visible, testable, and protected from accidental similarity changes. Field boosts still determine the relative importance of names, aliases, professions, categories, descriptions, and related terms.
 
 ### `directory_text`
 
@@ -214,11 +219,14 @@ Bootstrap and integration tests call the Analyze API with representative names, 
 
 ### Free text
 
-An empty query uses `match_all`. A non-empty query uses a Boolean relevance query containing:
+An empty query uses `match_all`. A non-empty query uses BM25 through a Boolean relevance query containing:
 
 - a high-boost name phrase match;
-- a boosted `multi_match` across name, aliases, business type, category, tags, description, controlled attributes, synonyms, and related terms;
+- a boosted `multi_match` across name, indexed aliases, business type, category, tags, description, controlled-attribute text subfields, profile synonyms, and related terms;
 - bounded `AUTO` fuzziness on the general multi-match clause for ordinary typing errors.
+- an autocomplete clause targeting only edge-ngram name and alias subfields.
+
+The outer lexical clause requires at least one of phrase, general/fuzzy, or autocomplete matching. Synonym expansion occurs through the description search analyzer, aliases contribute as their own high-boost field, and autocomplete remains lower-boost than a complete name match.
 
 The approximate field-weight order is:
 
@@ -415,7 +423,7 @@ The work is complete when:
 1. A new developer can follow the onboarding guide from prerequisites to a working app and Dashboards session.
 2. Bootstrap creates analysis settings and strict mappings before profile indexing.
 3. The seed data contains only the three approved design-professional categories.
-4. Free-text search ranks representative name, description, synonym, and controlled-field matches correctly.
+4. Free-text search uses the configured BM25 scorer and ranks representative name, description, synonym, alias, fuzzy, autocomplete, and controlled-field matches correctly.
 5. Category, Business Type, and State work as exact primary filters.
 6. Additional selected options use global OR, matching more options improves ranking, and profile cards show matching labels.
 7. Aggregation counts populate every required control.
@@ -429,6 +437,7 @@ The work is complete when:
 
 - [OpenSearch mappings](https://docs.opensearch.org/latest/mappings/): explicit mappings and immutable existing field types.
 - [OpenSearch text analysis](https://docs.opensearch.org/latest/analyzers/): tokenizers, filters, normalization, stemming, and index/search analysis.
+- [OpenSearch similarity](https://docs.opensearch.org/latest/im-plugin/similarity/): explicit BM25 scoring and its `k1`, `b`, and overlap parameters.
 - [Synonym graph token filter](https://docs.opensearch.org/latest/analyzers/token-filters/synonym-graph/): multiword synonym handling.
 - [Normalizer mapping parameter](https://docs.opensearch.org/latest/mappings/mapping-parameters/normalizer/): single-token keyword normalization.
 - [Multi-match query](https://docs.opensearch.org/latest/query-dsl/full-text/multi-match/): boosted multi-field relevance.
@@ -438,4 +447,3 @@ The work is complete when:
 - [JavaScript bulk helper](https://docs.opensearch.org/latest/clients/javascript/helpers/): controlled bulk indexing.
 - [Docker installation](https://docs.opensearch.org/latest/install-and-configure/install-opensearch/docker/): matching services, strong initial password, host settings, and local Compose guidance.
 - [OpenSearch 3.8 artifacts](https://opensearch.org/artifacts/by-version/): pinned OpenSearch and Dashboards release.
-
