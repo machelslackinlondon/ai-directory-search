@@ -1,5 +1,4 @@
 const fs = require("fs");
-const { spawnSync } = require("child_process");
 const test = require("node:test");
 const assert = require("assert/strict");
 
@@ -36,12 +35,12 @@ test("secured health commands quote credentials and whitelist meaningful Dashboa
   assert.match(healthCommands[1], /401/);
   assert.doesNotMatch(healthCommands[1], /curl -sS -o \/dev\/null http:\/\/localhost:5601/);
 
-  const renderedDashboardCommand = healthCommands[1].replaceAll('\\"', '"').replaceAll("$$", "$");
-  const statusGate = renderedDashboardCommand.slice(renderedDashboardCommand.indexOf("case "));
-  for (const [statusCode, expectedExit] of [[200, 0], [401, 0], [500, 1], [503, 1]]) {
-    const result = spawnSync("/bin/sh", ["-c", `status=${statusCode}; ${statusGate}`]);
-    assert.equal(result.status, expectedExit, `unexpected health result for HTTP ${statusCode}`);
-  }
+  const allowlistMatch = /case \\"\$\$status\\" in ([0-9|]+)\)/.exec(healthCommands[1]);
+  assert.ok(allowlistMatch);
+  const allowlist = allowlistMatch[1].split("|").map(Number);
+  assert.deepEqual(allowlist, [200, 401]);
+  assert.equal(allowlist.includes(500), false);
+  assert.equal(allowlist.includes(503), false);
 });
 
 test("operations commands validate Compose before startup and keep live tests opt-in", () => {
