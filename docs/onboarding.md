@@ -116,6 +116,6 @@ The named volume and retained physical indexes remain available for the next `np
 ## Troubleshooting
 
 - Use `npm run opensearch:logs` for password bootstrap, startup, certificate, or health-check failures.
-- Use `npm run opensearch:verify` to recheck the stable alias, strict schema version, and six-document count.
+- Use `npm run opensearch:verify` to recheck the versioned template, stable alias, effective strict mapping/schema version, and six-document count.
 - A password change in `.env` does not rewrite credentials in an existing OpenSearch volume. Restore the original local password or deliberately recreate the local volume and reindex from canonical data.
 - `OPENSEARCH_TLS_REJECT_UNAUTHORIZED=false` accepts only the demo self-signed certificate for local development. Never copy that bypass into production; see [Deployment](deployment.md).

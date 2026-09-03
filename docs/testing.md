@@ -17,7 +17,7 @@ npm run opensearch:verify
 npm run opensearch:test
 ```
 
-`opensearch:verify` checks the `directory-profiles` alias has exactly one physical target, the strict mapping has schema version `1`, and the index contains the same six documents as the canonical store.
+`opensearch:verify` fetches `directory-profiles-template-v1` and checks its index pattern, strict mapping, and schema version. It also checks the `directory-profiles` alias has exactly one physical target, that target's effective mapping is `dynamic: strict` with schema version `1`, and the alias contains the same six documents as the canonical store.
 
 The live suite uses the real store, official client, and production adapter path. It independently proves:
 
@@ -43,7 +43,7 @@ Start the OpenSearch-backed app with `npm run dev`, then check desktop and mobil
 
 - Business Type, Category, and State remain visible and combine with AND.
 - More Filters reveals Rooms, Project Types, Styles, and Services with counts.
-- Checkbox changes remain pending until Apply Filters; Clear All removes them.
+- Checkbox changes remain pending until Apply Filters; Clear All resets primary and preference filters.
 - Applied filters produce removable chips and result-card `matchLabels`.
 - The live result count uses the API `total`, not just the current page length.
 - Result/detail navigation, agent answer, and admin stats work.

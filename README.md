@@ -40,9 +40,11 @@ Open the app at `http://127.0.0.1:3000` and OpenSearch Dashboards at `http://127
 ```bash
 npm run dev                   # start the app; OpenSearch is attempted first
 npm run setup:opensearch      # start, bootstrap, seed, reindex, and verify
+npm run opensearch:up         # validate Compose and start both local services
+npm run opensearch:wait       # wait until cluster health is yellow or green
 npm run opensearch:bootstrap  # install/verify mappings and analyzers before indexing
 npm run opensearch:reindex    # build a versioned index and atomically move the alias
-npm run opensearch:verify     # verify alias, strict mapping version, and document count
+npm run opensearch:verify     # verify template, alias, effective strict mapping, and count
 npm run opensearch:logs       # follow local OpenSearch and Dashboards logs
 npm run opensearch:down       # stop containers but retain indexed local data
 npm test                      # fast suite; Docker-backed tests are skipped

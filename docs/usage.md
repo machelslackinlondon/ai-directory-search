@@ -8,7 +8,7 @@ Enter a profile name, alias, professional discipline, location, project language
 
 The three always-visible controls are Business Type, Category, and State. They combine with AND semantics. The only Categories are Architecture, Interior Design + Decor, and Outdoor + Garden Design.
 
-Open More Filters for Rooms, Project Types, Styles, and Services. Checkbox edits remain pending until Apply Filters. All applied preference selections form one global OR, and profiles matching more selections rank higher. Clear All removes the preference selections; every applied chip can also be removed individually. Result cards show `matchLabels` for the selected options that profile matched.
+Open More Filters for Rooms, Project Types, Styles, and Services. Checkbox edits remain pending until Apply Filters. All applied preference selections form one global OR, and profiles matching more selections rank higher. Clear All resets the three primary controls and every preference selection; every applied chip can also be removed individually. Result cards show `matchLabels` for the selected options that profile matched.
 
 Sort by Relevance, Name, Newest, Recently updated, or Category. Selecting a result opens its full profile.
 
