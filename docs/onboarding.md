@@ -46,7 +46,7 @@ Persist that host setting according to your Linux distribution if you use the st
    npm run setup:opensearch
    ```
 
-   Expected: both containers start, OpenSearch becomes healthy, the versioned template/mappings/analyzers are installed before indexing, six seed profiles are written to the canonical JSON store, a new physical index is populated, and the `directory-profiles` alias verifies with schema version `1`.
+   Expected: both containers start, OpenSearch becomes healthy, the versioned template/mappings/analyzers are installed before indexing, six seed profiles are written to the canonical JSON store, a new physical index is populated, and the `directory-profiles` alias verifies with schema version `1`. The readiness step polls for up to two minutes, matching the Compose health-check budget for a first container start.
 
 5. Run the fast suite.
 

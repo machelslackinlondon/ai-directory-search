@@ -81,7 +81,7 @@ function createOpenSearchSearchAdapter(store, options = {}) {
   const alias = options.indexAlias || options.env?.OPENSEARCH_INDEX_ALIAS || process.env.OPENSEARCH_INDEX_ALIAS || DEFAULT_INDEX_ALIAS;
   const now = options.now || (() => new Date());
   const sleep = options.sleep || ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
-  const readyTimeoutMs = options.readyTimeoutMs ?? 30_000;
+  const readyTimeoutMs = options.readyTimeoutMs ?? 120_000;
   let lastSuccessfulReindex = null;
 
   async function installTemplate() {

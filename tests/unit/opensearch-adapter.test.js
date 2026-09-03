@@ -710,6 +710,19 @@ test("waitForReady retries only recoverable availability errors", async () => {
   assert.deepEqual(sleeps, [500]);
 });
 
+test("waitForReady default covers the Compose first-start health budget", async () => {
+  let currentTime = 0;
+  const client = makeClientDouble([], { healthStatuses: Array(240).fill("red") });
+  const adapter = createOpenSearchSearchAdapter(store, {
+    client,
+    now: () => new Date(currentTime),
+    sleep: async (milliseconds) => { currentTime += milliseconds; }
+  });
+
+  assert.equal((await adapter.waitForReady()).status, "yellow");
+  assert.equal(currentTime, 120_000);
+});
+
 test("waitForReady treats official NoLivingConnectionsError names and types as recoverable", async (t) => {
   for (const property of ["name", "type"]) {
     await t.test(property, async () => {
