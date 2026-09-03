@@ -3,6 +3,7 @@ const assert = require("assert/strict");
 const { toolSchemas } = require("../../src/server/mcp/contracts");
 const { callMcpTool, listMcpTools } = require("../../src/server/mcp/tools");
 const { createTestContext } = require("../helpers");
+const { DESIGN_CATEGORIES } = require("../../src/server/directory/designTaxonomy");
 
 test("MCP tool schemas include required contracts", () => {
   const names = listMcpTools().map((tool) => tool.name);
@@ -34,6 +35,61 @@ test("MCP search and lookup tools share directory logic", async () => {
 
   const entry = await callMcpTool("get_directory_entry", { id: search.results[0].id }, context);
   assert.equal(entry.id, "hearth-kitchen-studio");
+});
+
+test("MCP detail and category tools await adapter methods", async () => {
+  const base = createTestContext();
+  const adapterEntry = { ...base.store.getEntry("hearth-kitchen-studio"), name: "Adapter MCP Detail" };
+  let getEntryCalls = 0;
+  let listCategoryCalls = 0;
+  const context = {
+    ...base,
+    searchAdapter: {
+      async getEntry(id) {
+        getEntryCalls += 1;
+        await new Promise((resolve) => setImmediate(resolve));
+        return id === adapterEntry.id ? adapterEntry : null;
+      },
+      async listCategories() {
+        listCategoryCalls += 1;
+        await new Promise((resolve) => setImmediate(resolve));
+        return DESIGN_CATEGORIES;
+      }
+    }
+  };
+
+  const entry = await callMcpTool("get_directory_entry", { id: adapterEntry.id }, context);
+  const categories = await callMcpTool("list_directory_categories", {}, context);
+
+  assert.equal(entry.name, "Adapter MCP Detail");
+  assert.deepEqual(categories, DESIGN_CATEGORIES);
+  assert.equal(getEntryCalls, 1);
+  assert.equal(listCategoryCalls, 1);
+});
+
+test("MCP upsert rejects imported nested taxonomy that hides builders and industrial facets", async () => {
+  const context = createTestContext();
+
+  await assert.rejects(() => callMcpTool("upsert_directory_entry", {
+    entry: {
+      id: "invalid-mcp-taxonomy",
+      name: "Invalid MCP Taxonomy",
+      description: "Must not hide uncontrolled values in nested taxonomy.",
+      category: "Architecture",
+      businessType: "Residential Architect",
+      state: "California",
+      taxonomy: {
+        category: "Builders + Contractors",
+        subcategory: "General Contractor",
+        facets: { industry: ["Industrial"] }
+      }
+    }
+  }, context), (error) => {
+    assert.equal(error.code, "VALIDATION_ERROR");
+    assert.match(error.message, /Builders \+ Contractors/);
+    assert.match(error.message, /Industrial|industry/);
+    return true;
+  });
 });
 
 test("MCP search preserves backend, fallback, facets, and match labels", async () => {

@@ -38,7 +38,7 @@ Matches are returned with display-safe canonical labels:
 ```json
 {
   "facet": "services",
-  "value": "full-service design",
+  "value": "full-service-design",
   "label": "Full-service Design"
 }
 ```
@@ -72,7 +72,7 @@ Every item in a result's `matchLabels` corresponds to a currently selected prefe
 }
 ```
 
-Validation canonicalizes case, whitespace, and accents for controlled values, rejects unknown values and invalid Category/Business Type pairs, and derives the display `location` from City and State when needed.
+Validation canonicalizes case, whitespace, and accents for controlled values, rejects unknown facet keys and values and invalid Category/Business Type pairs, and derives the display `location` from City and State when needed. Imported top-level taxonomy cannot add categories, business types, facets, or State values to the canonical public contract.
 
 ## Synonyms, aliases, and governance
 

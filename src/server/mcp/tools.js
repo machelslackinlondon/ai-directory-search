@@ -42,7 +42,7 @@ async function callMcpTool(name, args = {}, context) {
   }
 
   if (name === "get_directory_entry") {
-    const entry = store.getEntry(args.id);
+    const entry = await searchAdapter.getEntry(args.id);
     if (!entry) {
       const error = new Error(`Directory entry not found: ${args.id}`);
       error.code = "NOT_FOUND";
@@ -52,7 +52,7 @@ async function callMcpTool(name, args = {}, context) {
   }
 
   if (name === "list_directory_categories") {
-    return store.getTaxonomy().categories;
+    return await searchAdapter.listCategories();
   }
 
   if (name === "upsert_directory_entry") {

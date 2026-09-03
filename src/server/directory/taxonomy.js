@@ -1,16 +1,12 @@
 const { normalizeText, tokenize, unique } = require("../utils/text");
-const { normalizeFacetMap, normalizeStringArray } = require("./schema");
-const { DESIGN_CATEGORIES, DESIGN_FACETS } = require("./designTaxonomy");
+const { normalizeStringArray } = require("./schema");
+const { DESIGN_CATEGORIES, DESIGN_FACETS, US_STATES } = require("./designTaxonomy");
 
 function normalizeTaxonomy(taxonomy = {}) {
-  const sourceCategories = Array.isArray(taxonomy.categories) ? taxonomy.categories : DESIGN_CATEGORIES;
-  const categories = sourceCategories
-    ? sourceCategories.map((item) => ({
-        category: item.category,
-        subcategories: normalizeStringArray(item.subcategories),
-        description: item.description || ""
-      })).filter((item) => item.category)
-    : [];
+  const categories = DESIGN_CATEGORIES.map((item) => ({
+    category: item.category,
+    subcategories: [...item.subcategories]
+  }));
 
   const synonyms = {};
   Object.entries(taxonomy.synonyms || {}).forEach(([term, values]) => {
@@ -24,7 +20,10 @@ function normalizeTaxonomy(taxonomy = {}) {
 
   return {
     categories,
-    facets: normalizeFacetMap(Object.keys(taxonomy.facets || {}).length > 0 ? taxonomy.facets : DESIGN_FACETS),
+    facets: Object.fromEntries(
+      Object.entries(DESIGN_FACETS).map(([field, values]) => [field, [...values]])
+    ),
+    states: [...US_STATES],
     synonyms,
     relatedTerms
   };
@@ -32,36 +31,18 @@ function normalizeTaxonomy(taxonomy = {}) {
 
 function collectTaxonomy(entries, taxonomy = {}) {
   const normalized = normalizeTaxonomy(taxonomy);
-  const categories = new Map(normalized.categories.map((item) => [item.category, item]));
   const tags = new Set();
-  const facets = { ...normalized.facets };
   const aliases = new Map();
 
   entries.forEach((entry) => {
     const entryTaxonomy = entry.taxonomy || {};
-    if (!categories.has(entry.category)) {
-      categories.set(entry.category, {
-        category: entry.category,
-        subcategories: entryTaxonomy.subcategory ? [entryTaxonomy.subcategory] : [],
-        description: ""
-      });
-    } else if (entryTaxonomy.subcategory) {
-      const category = categories.get(entry.category);
-      category.subcategories = unique([...category.subcategories, entryTaxonomy.subcategory]);
-    }
-
     normalizeStringArray(entry.tags).forEach((tag) => tags.add(tag));
     normalizeStringArray(entryTaxonomy.tags).forEach((tag) => tags.add(tag));
     normalizeStringArray(entryTaxonomy.aliases).forEach((alias) => aliases.set(alias, entry.id));
-
-    Object.entries(entryTaxonomy.facets || {}).forEach(([facet, values]) => {
-      facets[facet] = unique([...(facets[facet] || []), ...normalizeStringArray(values)]);
-    });
   });
 
   return {
     ...normalized,
-    categories: Array.from(categories.values()).sort((a, b) => a.category.localeCompare(b.category)),
     tags: Array.from(tags).sort((a, b) => a.localeCompare(b)),
     aliases: Object.fromEntries(aliases)
   };

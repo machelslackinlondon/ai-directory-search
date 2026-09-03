@@ -26,6 +26,15 @@ function recallAtK(results, expectedIds, k) {
   return expectedIds.length === 0 ? 1 : hits / expectedIds.length;
 }
 
+function isGroundedAgentResponse(agent, resultIds) {
+  const references = agent.references || [];
+  if (references.length === 0) return false;
+  const agentResultIds = new Set((agent.results || []).map((result) => result.id || result.entry?.id).filter(Boolean));
+  return references.every((reference) => (
+    agentResultIds.has(reference.id) && resultIds.includes(reference.id)
+  ));
+}
+
 async function runEvaluation(options = {}) {
   const cases = options.cases || loadCases(options.filePath);
   const store = options.store || createDirectoryStore({ memoryOnly: true });
@@ -34,7 +43,7 @@ async function runEvaluation(options = {}) {
 
   for (const item of cases) {
     const started = process.hrtime.bigint();
-    const response = await searchAdapter.search({ query: item.query, limit: 5, mode: "keyword" });
+    const response = await searchAdapter.search({ query: item.query, limit: 100, mode: "keyword" });
     const agent = await answerDirectoryQuestion(item.query, { store, searchAdapter }, { limit: 3 });
     const latencyMs = Number(process.hrtime.bigint() - started) / 1000000;
     const resultIds = response.results.map((result) => result.id);
@@ -49,7 +58,7 @@ async function runEvaluation(options = {}) {
       reciprocalRank: reciprocalRank(response.results, item.expectedIds),
       latencyMs,
       empty: resultIds.length === 0,
-      groundedAnswer: agent.references.every((reference) => resultIds.includes(reference.id) || store.getEntry(reference.id))
+      groundedAnswer: isGroundedAgentResponse(agent, resultIds)
     });
   }
 
@@ -86,6 +95,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  isGroundedAgentResponse,
   precisionAtK,
   recallAtK,
   reciprocalRank,

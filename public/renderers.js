@@ -28,6 +28,17 @@
     return `<div class="state ${tone || ""}" role="status">${escapeHtml(message)}</div>`;
   }
 
+  function safeRecordUrl(value) {
+    const candidate = String(value || "").trim();
+    if (!candidate) return "";
+    try {
+      const parsed = new URL(candidate);
+      return parsed.protocol === "http:" || parsed.protocol === "https:" ? candidate : "";
+    } catch {
+      return "";
+    }
+  }
+
   function renderResultList(results, selectedId) {
     if (!results || results.length === 0) {
       return renderState("No matching entries found.", "empty");
@@ -59,6 +70,7 @@
       return renderState("Select a result to inspect its directory record.", "muted");
     }
     const taxonomy = entry.taxonomy || {};
+    const recordUrl = safeRecordUrl(entry.url);
     const facets = Object.entries(taxonomy.facets || {}).map(([key, values]) => `
       <div class="kv"><span>${escapeHtml(key)}</span><strong>${escapeHtml((values || []).join(", "))}</strong></div>
     `).join("");
@@ -82,7 +94,7 @@
           ${facets}
           ${metadata}
         </div>
-        ${entry.url ? `<a class="record-link" href="${escapeHtml(entry.url)}" target="_blank" rel="noreferrer">Open record</a>` : ""}
+        ${recordUrl ? `<a class="record-link" href="${escapeHtml(recordUrl)}" target="_blank" rel="noopener noreferrer">Open record</a>` : ""}
       </article>
     `;
   }

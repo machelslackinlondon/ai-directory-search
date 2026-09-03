@@ -1,6 +1,9 @@
 const test = require("node:test");
 const assert = require("assert/strict");
 const { parseCsv } = require("../../src/server/directory/csv");
+const seed = require("../../src/data/seed-directory.json");
+const { DESIGN_CATEGORIES, DESIGN_FACETS } = require("../../src/server/directory/designTaxonomy");
+const { createMemoryDirectoryStore } = require("../../src/server/directory/store");
 const {
   normalizeEntry,
   validateAndNormalizeEntry,
@@ -110,4 +113,55 @@ test("rejects a business type outside its category", () => {
   });
   assert.equal(result.ok, false);
   assert.match(result.errors.join(" "), /Residential Architect.*Outdoor \+ Garden Design/);
+});
+
+test("rejects imported top-level taxonomy outside the controlled directory contract", () => {
+  const result = validateDirectoryPayload({
+    taxonomy: {
+      categories: [{
+        category: "Builders + Contractors",
+        subcategories: ["General Contractor"]
+      }],
+      facets: {
+        services: ["Industrial"],
+        sectors: ["Industrial"]
+      }
+    },
+    entries: [{
+      id: "valid-profile",
+      name: "Valid Profile",
+      description: "A valid controlled profile.",
+      category: "Architecture",
+      businessType: "Residential Architect",
+      state: "California"
+    }]
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join(" "), /Builders \+ Contractors/);
+  assert.match(result.errors.join(" "), /Industrial/);
+  assert.match(result.errors.join(" "), /sectors/);
+});
+
+test("store imports reject invalid taxonomy without changing the canonical public taxonomy", () => {
+  const store = createMemoryDirectoryStore(seed);
+
+  assert.throws(() => store.importEntries({
+    taxonomy: {
+      categories: [{ category: "Builders + Contractors", subcategories: ["General Contractor"] }],
+      facets: { services: ["Industrial"] }
+    },
+    entries: [{
+      id: "invalid-taxonomy-import",
+      name: "Invalid Taxonomy Import",
+      description: "Must not redefine the directory taxonomy.",
+      category: "Architecture",
+      businessType: "Residential Architect",
+      state: "California"
+    }]
+  }), /Builders \+ Contractors|Industrial/);
+
+  const taxonomy = store.getTaxonomy();
+  assert.deepEqual(taxonomy.categories, DESIGN_CATEGORIES);
+  assert.deepEqual(taxonomy.facets, DESIGN_FACETS);
 });

@@ -176,3 +176,35 @@ test("agent still applies the fixed low-score guard to memory results", async ()
   assert.deepEqual(response.results, []);
   assert.equal(response.grounded, false);
 });
+
+test("agent preserves non-recoverable search errors without retrying", async (t) => {
+  const cases = [
+    Object.assign(new Error("Bad request."), { code: "OPENSEARCH_BAD_REQUEST", statusCode: 400 }),
+    Object.assign(new Error("Authentication failed."), { code: "OPENSEARCH_AUTHENTICATION_FAILED", statusCode: 401 }),
+    Object.assign(new Error("Authorization failed."), { code: "OPENSEARCH_AUTHORIZATION_FAILED", statusCode: 403 }),
+    Object.assign(new Error("Schema mismatch."), { code: "OPENSEARCH_SCHEMA_MISMATCH" })
+  ];
+
+  for (const expectedError of cases) {
+    await t.test(expectedError.code, async () => {
+      const base = createTestContext();
+      let searchCalls = 0;
+      const context = {
+        store: base.store,
+        searchAdapter: {
+          async stats() { return { adapter: "opensearch" }; },
+          async search() {
+            searchCalls += 1;
+            throw expectedError;
+          }
+        }
+      };
+
+      await assert.rejects(
+        () => answerDirectoryQuestion("Show me Architecture", context),
+        (error) => error === expectedError
+      );
+      assert.equal(searchCalls, 1);
+    });
+  }
+});

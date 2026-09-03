@@ -185,14 +185,19 @@ function createAppServer(options = {}) {
 
     if (req.method === "GET" && url.pathname.startsWith("/api/entries/")) {
       const id = decodeURIComponent(url.pathname.replace("/api/entries/", ""));
-      const entry = context.store.getEntry(id);
+      const entry = await context.searchAdapter.getEntry(id);
       if (!entry) sendJson(res, 404, { error: "Entry not found.", id });
       else sendJson(res, 200, entry);
       return true;
     }
 
     if (req.method === "GET" && url.pathname === "/api/categories") {
-      sendJson(res, 200, context.store.getTaxonomy());
+      const categories = await context.searchAdapter.listCategories();
+      sendJson(res, 200, {
+        ...context.store.getTaxonomy(),
+        categories,
+        states: [...US_STATES]
+      });
       return true;
     }
 

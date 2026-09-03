@@ -4,6 +4,8 @@ const test = require("node:test");
 const assert = require("assert/strict");
 const vm = require("vm");
 const renderers = require("../../public/renderers");
+const { US_STATES } = require("../../src/server/directory/designTaxonomy");
+const { close, createTestServer, request } = require("../helpers");
 
 class FakeElement {
   constructor(selector) {
@@ -381,4 +383,223 @@ test("only the latest search response controls results, errors, and loading stat
   assert.match(document.elements["#results"].innerHTML, /Newer result/);
   assert.doesNotMatch(document.elements["#results"].innerHTML, /Searching directory|older failure/);
   assert.equal(document.elements["#result-count"].textContent, "1 entry");
+});
+
+test("the real taxonomy API initially populates every canonical state in the UI", async () => {
+  const { server, port } = await createTestServer();
+  let taxonomy;
+  try {
+    const response = await request(port, "GET", "/api/categories");
+    assert.equal(response.statusCode, 200);
+    taxonomy = response.body;
+  } finally {
+    await close(server);
+  }
+
+  const document = createFakeDocument();
+  const appJs = fs.readFileSync(path.join(process.cwd(), "public", "app.js"), "utf8");
+  const context = {
+    console: { info: () => {} },
+    document,
+    setTimeout,
+    clearTimeout,
+    URLSearchParams,
+    window: { DirectoryRenderers: renderers },
+    fetch: async (url) => {
+      if (url === "/api/categories") return { ok: true, json: async () => taxonomy };
+      if (url === "/api/stats") return { ok: true, json: async () => ({ entries: 6 }) };
+      if (String(url).startsWith("/api/search")) return { ok: true, json: async () => ({ results: [], facets: {} }) };
+      throw new Error(`Unexpected URL ${url}`);
+    }
+  };
+
+  vm.runInNewContext(appJs, context, { filename: "public/app.js" });
+  await settle();
+
+  const options = [...document.elements["#state-filter"].innerHTML.matchAll(/<option value="([^"]*)"/g)]
+    .map((match) => match[1]);
+  assert.deepEqual(options, ["", ...US_STATES]);
+});
+
+test("only the latest detail request may update the selected result", async () => {
+  const document = createFakeDocument();
+  const older = deferred();
+  const newer = deferred();
+  const appJs = fs.readFileSync(path.join(process.cwd(), "public", "app.js"), "utf8");
+  const context = {
+    console: { info: () => {} },
+    document,
+    setTimeout,
+    clearTimeout,
+    URLSearchParams,
+    window: { DirectoryRenderers: renderers },
+    fetch: async (url) => {
+      if (url === "/api/categories") return { ok: true, json: async () => ({ categories: [], facets: {}, states: [] }) };
+      if (url === "/api/stats") return { ok: true, json: async () => ({ entries: 0 }) };
+      if (String(url).startsWith("/api/search")) return { ok: true, json: async () => ({ results: [], facets: {} }) };
+      if (url === "/api/entries/older") return older.promise;
+      if (url === "/api/entries/newer") return newer.promise;
+      throw new Error(`Unexpected URL ${url}`);
+    }
+  };
+
+  vm.runInNewContext(appJs, context, { filename: "public/app.js" });
+  await settle();
+
+  const olderRequest = context.openDetail("older");
+  const newerRequest = context.openDetail("newer");
+  newer.resolve({
+    ok: true,
+    json: async () => ({
+      id: "newer",
+      name: "Newer Detail",
+      category: "Architecture",
+      description: "The selected detail.",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    })
+  });
+  await newerRequest;
+  assert.match(document.elements["#detail"].innerHTML, /Newer Detail/);
+
+  older.resolve({
+    ok: true,
+    json: async () => ({
+      id: "older",
+      name: "Older Detail",
+      category: "Architecture",
+      description: "A stale detail.",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    })
+  });
+  await olderRequest;
+
+  assert.match(document.elements["#detail"].innerHTML, /Newer Detail/);
+  assert.doesNotMatch(document.elements["#detail"].innerHTML, /Older Detail/);
+});
+
+test("Enter cannot submit a duplicate agent request while Ask is busy", async () => {
+  const document = createFakeDocument();
+  const agentResponse = deferred();
+  let agentCalls = 0;
+  const appJs = fs.readFileSync(path.join(process.cwd(), "public", "app.js"), "utf8");
+  const context = {
+    console: { info: () => {} },
+    document,
+    setTimeout,
+    clearTimeout,
+    URLSearchParams,
+    window: { DirectoryRenderers: renderers },
+    fetch: async (url) => {
+      if (url === "/api/categories") return { ok: true, json: async () => ({ categories: [], facets: {}, states: [] }) };
+      if (url === "/api/stats") return { ok: true, json: async () => ({ entries: 0 }) };
+      if (String(url).startsWith("/api/search")) return { ok: true, json: async () => ({ results: [], facets: {} }) };
+      if (url === "/api/agent") {
+        agentCalls += 1;
+        return agentResponse.promise;
+      }
+      throw new Error(`Unexpected URL ${url}`);
+    }
+  };
+
+  vm.runInNewContext(appJs, context, { filename: "public/app.js" });
+  await settle();
+  document.elements["#agent-input"].value = "Who handles modern architecture?";
+
+  const firstSubmit = document.elements["#agent-button"].dispatch("click");
+  await tick();
+  await document.elements["#agent-input"].dispatch("keydown", { key: "Enter" });
+  await tick();
+
+  assert.equal(agentCalls, 1);
+  agentResponse.resolve({
+    ok: true,
+    json: async () => ({ answer: "Atelier North Architecture", references: [{ id: "atelier-north-architecture" }] })
+  });
+  await firstSubmit;
+});
+
+test("healthy and degraded OpenSearch reindex UI use indexed counts and stable status", async () => {
+  const document = createFakeDocument();
+  let reindexCalls = 0;
+  const appJs = fs.readFileSync(path.join(process.cwd(), "public", "app.js"), "utf8");
+  const context = {
+    console: { info: () => {} },
+    document,
+    setTimeout,
+    clearTimeout,
+    URLSearchParams,
+    window: { DirectoryRenderers: renderers },
+    fetch: async (url) => {
+      if (url === "/api/categories") return { ok: true, json: async () => ({ categories: [], facets: {}, states: [] }) };
+      if (url === "/api/stats") return { ok: true, json: async () => ({ entries: 6, backend: "opensearch" }) };
+      if (String(url).startsWith("/api/search")) return { ok: true, json: async () => ({ results: [], facets: {} }) };
+      if (url === "/api/admin/reindex") {
+        reindexCalls += 1;
+        return {
+          ok: true,
+          json: async () => reindexCalls === 1
+            ? { indexed: 6, backend: "opensearch", fallback: false }
+            : { entries: 6, backend: "memory", fallback: true, fallbackReason: "OPENSEARCH_COOLDOWN" }
+        };
+      }
+      throw new Error(`Unexpected URL ${url}`);
+    }
+  };
+
+  vm.runInNewContext(appJs, context, { filename: "public/app.js" });
+  await settle();
+  await document.elements["#reindex-button"].dispatch("click");
+
+  assert.match(document.elements["#admin-status"].innerHTML, /Indexed 6 entries/);
+  assert.match(document.elements["#admin-status"].innerHTML, /state success/);
+  assert.doesNotMatch(document.elements["#admin-status"].innerHTML, /degraded/i);
+
+  await document.elements["#reindex-button"].dispatch("click");
+  assert.match(document.elements["#admin-status"].innerHTML, /Indexed 6 entries/);
+  assert.match(document.elements["#admin-status"].innerHTML, /degraded.*OPENSEARCH_COOLDOWN/i);
+  assert.match(document.elements["#admin-status"].innerHTML, /state warn/);
+});
+
+test("degraded OpenSearch import UI warns with the stable fallback reason", async () => {
+  const document = createFakeDocument();
+  const appJs = fs.readFileSync(path.join(process.cwd(), "public", "app.js"), "utf8");
+  const context = {
+    console: { info: () => {} },
+    document,
+    setTimeout,
+    clearTimeout,
+    URLSearchParams,
+    window: { DirectoryRenderers: renderers },
+    fetch: async (url) => {
+      if (url === "/api/categories") return { ok: true, json: async () => ({ categories: [], facets: {}, states: [] }) };
+      if (url === "/api/stats") return { ok: true, json: async () => ({ entries: 7, backend: "memory", fallback: true }) };
+      if (String(url).startsWith("/api/search")) return { ok: true, json: async () => ({ results: [], facets: {} }) };
+      if (url === "/api/admin/import") {
+        return {
+          ok: true,
+          json: async () => ({
+            count: 1,
+            entries: ["degraded-import"],
+            stats: {
+              indexed: 7,
+              backend: "memory",
+              fallback: true,
+              fallbackReason: "ECONNREFUSED"
+            }
+          })
+        };
+      }
+      throw new Error(`Unexpected URL ${url}`);
+    }
+  };
+
+  vm.runInNewContext(appJs, context, { filename: "public/app.js" });
+  await settle();
+  document.elements["#import-content"].value = JSON.stringify({ entries: [] });
+  await document.elements["#import-button"].dispatch("click");
+
+  assert.match(document.elements["#admin-status"].innerHTML, /Imported 1 entry/);
+  assert.match(document.elements["#admin-status"].innerHTML, /Indexed 7 entries/);
+  assert.match(document.elements["#admin-status"].innerHTML, /degraded.*ECONNREFUSED/i);
+  assert.match(document.elements["#admin-status"].innerHTML, /state warn/);
 });

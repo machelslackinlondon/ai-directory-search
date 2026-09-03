@@ -23,6 +23,7 @@ const state = {
   facets: {},
   knownStates: [],
   searchRequestId: 0,
+  detailRequestId: 0,
   loading: false,
   error: null,
   view: "search"
@@ -283,6 +284,7 @@ async function loadStats() {
 
 async function runSearch() {
   const requestId = ++state.searchRequestId;
+  state.detailRequestId += 1;
   const filters = getFilters();
   logInteraction("Search started", {
     query: elements.searchInput.value || "(empty)",
@@ -328,19 +330,27 @@ async function runSearch() {
 }
 
 async function openDetail(id) {
+  const requestId = ++state.detailRequestId;
   logInteraction("Detail requested", { id });
   state.selectedId = id;
   try {
-    state.detail = await api(`/api/entries/${encodeURIComponent(id)}`);
+    const detail = await api(`/api/entries/${encodeURIComponent(id)}`);
+    if (requestId !== state.detailRequestId || state.selectedId !== id) return;
+    state.detail = detail;
     logInteraction("Detail opened", { id, name: state.detail.name }, "success");
   } catch (error) {
+    if (requestId !== state.detailRequestId || state.selectedId !== id) return;
     logInteraction("Detail failed", { id, error: error.message }, "error");
   } finally {
-    render();
+    if (requestId === state.detailRequestId && state.selectedId === id) render();
   }
 }
 
 async function askAgent() {
+  if (state.agentLoading) {
+    logInteraction("Ask skipped", { reason: "request already in progress" }, "warn");
+    return;
+  }
   const question = elements.agentInput.value || elements.searchInput.value;
   if (!question.trim()) {
     logInteraction("Ask skipped", { reason: "empty question" }, "warn");
@@ -373,6 +383,30 @@ async function askAgent() {
   render();
 }
 
+function mutationIndexState(result = {}) {
+  const stats = result.stats && typeof result.stats === "object" ? result.stats : result;
+  const rawIndexed = stats.indexed ?? stats.entries;
+  const numericIndexed = Number(rawIndexed);
+  return {
+    indexed: rawIndexed !== "" && Number.isFinite(numericIndexed) ? numericIndexed : null,
+    fallback: Boolean(result.fallback || stats.fallback),
+    fallbackReason: result.fallbackReason || stats.fallbackReason || "OPENSEARCH_UNAVAILABLE"
+  };
+}
+
+function entryCountLabel(count) {
+  return `${count} ${count === 1 ? "entry" : "entries"}`;
+}
+
+function mutationStatusMessage(summary, indexState) {
+  const parts = [summary];
+  if (indexState.indexed !== null) parts.push(`Indexed ${entryCountLabel(indexState.indexed)}.`);
+  if (indexState.fallback) {
+    parts.push(`Indexing degraded (${indexState.fallbackReason}); memory fallback remains active.`);
+  }
+  return parts.join(" ");
+}
+
 async function importEntries() {
   logInteraction("Import started", {
     format: elements.importFormat.value,
@@ -392,8 +426,15 @@ async function importEntries() {
       headers: token ? { "x-admin-token": token } : {},
       body: JSON.stringify(payload)
     });
-    elements.adminStatus.innerHTML = renderers.renderState(`Imported ${result.count} entries.`, "success");
-    logInteraction("Import completed", { count: result.count, entries: result.entries }, "success");
+    const indexState = mutationIndexState(result);
+    const message = mutationStatusMessage(`Imported ${entryCountLabel(result.count)}.`, indexState);
+    elements.adminStatus.innerHTML = renderers.renderState(message, indexState.fallback ? "warn" : "success");
+    logInteraction("Import completed", {
+      count: result.count,
+      indexed: indexState.indexed,
+      fallback: indexState.fallback,
+      fallbackReason: indexState.fallback ? indexState.fallbackReason : undefined
+    }, indexState.fallback ? "warn" : "success");
     await Promise.all([loadCategories(), loadStats(), runSearch()]);
   } catch (error) {
     elements.adminStatus.innerHTML = renderers.renderState(error.message, "error");
@@ -411,8 +452,15 @@ async function reindex() {
       headers: token ? { "x-admin-token": token } : {},
       body: JSON.stringify({})
     });
-    elements.adminStatus.innerHTML = renderers.renderState(`Indexed ${result.entries} entries.`, "success");
-    logInteraction("Reindex completed", { entries: result.entries, adapter: result.adapter }, "success");
+    const indexState = mutationIndexState(result);
+    const message = mutationStatusMessage("Reindex completed.", indexState);
+    elements.adminStatus.innerHTML = renderers.renderState(message, indexState.fallback ? "warn" : "success");
+    logInteraction("Reindex completed", {
+      indexed: indexState.indexed,
+      adapter: result.adapter,
+      fallback: indexState.fallback,
+      fallbackReason: indexState.fallback ? indexState.fallbackReason : undefined
+    }, indexState.fallback ? "warn" : "success");
     await loadStats();
   } catch (error) {
     elements.adminStatus.innerHTML = renderers.renderState(error.message, "error");

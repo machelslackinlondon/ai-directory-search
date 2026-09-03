@@ -45,6 +45,21 @@ function normalizeFacetMap(value) {
   return Object.fromEntries(Object.entries(value).map(([key, items]) => [key, normalizeStringArray(items)]));
 }
 
+function normalizeDirectoryTaxonomy(taxonomy = {}) {
+  const source = isPlainObject(taxonomy) ? taxonomy : {};
+  return {
+    categories: DESIGN_CATEGORIES.map((item) => ({
+      category: item.category,
+      subcategories: [...item.subcategories]
+    })),
+    facets: Object.fromEntries(
+      Object.entries(DESIGN_FACETS).map(([field, values]) => [field, [...values]])
+    ),
+    synonyms: normalizeFacetMap(source.synonyms),
+    relatedTerms: normalizeFacetMap(source.relatedTerms)
+  };
+}
+
 function normalizeTaxonomyForEntry(entry) {
   const taxonomy = isPlainObject(entry.taxonomy) ? entry.taxonomy : {};
   const category = taxonomy.category || entry.category || "uncategorized";
@@ -69,6 +84,70 @@ function normalizeControlledArray(input, allowed, field, errors) {
   }).filter(Boolean);
 }
 
+function validateControlledScalar(value, allowed, field, errors) {
+  if (value === undefined || value === "") return "";
+  const canonical = canonicalizeControlledValue(allowed, value);
+  if (!canonical) errors.push(`${field} contains unsupported value: ${value}.`);
+  return canonical;
+}
+
+function validateFacetValues(facets, prefix, errors) {
+  if (facets === undefined) return;
+  if (!isPlainObject(facets)) {
+    errors.push(`${prefix} must be an object.`);
+    return;
+  }
+
+  Object.keys(facets).forEach((field) => {
+    if (!Object.prototype.hasOwnProperty.call(DESIGN_FACETS, field)) {
+      errors.push(`${prefix} contains unsupported facet key: ${field}.`);
+    }
+  });
+  Object.entries(DESIGN_FACETS).forEach(([field, allowed]) => {
+    if (facets[field] !== undefined) {
+      normalizeControlledArray(facets[field], allowed, `${prefix}.${field}`, errors);
+    }
+  });
+}
+
+function validateDirectoryTaxonomy(taxonomy) {
+  if (taxonomy === undefined) return [];
+  if (!isPlainObject(taxonomy)) return ["taxonomy must be an object."];
+
+  const errors = [];
+  if (taxonomy.categories !== undefined) {
+    if (!Array.isArray(taxonomy.categories)) {
+      errors.push("taxonomy.categories must be an array.");
+    } else {
+      taxonomy.categories.forEach((item, index) => {
+        if (!isPlainObject(item)) {
+          errors.push(`taxonomy.categories[${index}] must be an object.`);
+          return;
+        }
+        const category = validateControlledScalar(
+          item.category,
+          DESIGN_CATEGORIES.map((candidate) => candidate.category),
+          `taxonomy.categories[${index}].category`,
+          errors
+        );
+        normalizeStringArray(item.subcategories).forEach((value) => {
+          const businessType = validateControlledScalar(
+            value,
+            DESIGN_CATEGORIES.flatMap((candidate) => candidate.subcategories),
+            `taxonomy.categories[${index}].subcategories`,
+            errors
+          );
+          if (category && businessType && !businessTypeBelongsToCategory(category, businessType)) {
+            errors.push(`${businessType} does not belong to ${category}.`);
+          }
+        });
+      });
+    }
+  }
+  validateFacetValues(taxonomy.facets, "taxonomy.facets", errors);
+  return errors;
+}
+
 function validateControlledFields(input, options = {}) {
   const errors = [];
   const taxonomy = isPlainObject(input.taxonomy) ? input.taxonomy : {};
@@ -77,20 +156,33 @@ function validateControlledFields(input, options = {}) {
   const hasCategory = sourceCategory !== undefined && sourceCategory !== "";
   const hasBusinessType = sourceBusinessType !== undefined && sourceBusinessType !== "";
   const hasState = input.state !== undefined && input.state !== "";
-  const category = hasCategory ? canonicalizeControlledValue(DESIGN_CATEGORIES.map((item) => item.category), sourceCategory) : "";
-  const businessType = hasBusinessType ? canonicalizeControlledValue(DESIGN_CATEGORIES.flatMap((item) => item.subcategories), sourceBusinessType) : "";
+  const categoryValues = DESIGN_CATEGORIES.map((item) => item.category);
+  const businessTypeValues = DESIGN_CATEGORIES.flatMap((item) => item.subcategories);
+  const category = validateControlledScalar(sourceCategory, categoryValues, "category", errors);
+  const businessType = validateControlledScalar(sourceBusinessType, businessTypeValues, "businessType", errors);
+  const taxonomyCategory = validateControlledScalar(taxonomy.category, categoryValues, "taxonomy.category", errors);
+  const taxonomyBusinessType = validateControlledScalar(
+    taxonomy.subcategory,
+    businessTypeValues,
+    "taxonomy.subcategory",
+    errors
+  );
 
-  if (hasCategory && !category) errors.push(`category contains unsupported value: ${sourceCategory}.`);
-  if (hasBusinessType && !businessType) errors.push(`businessType contains unsupported value: ${sourceBusinessType}.`);
+  if (input.category !== undefined && taxonomy.category !== undefined && category && taxonomyCategory && category !== taxonomyCategory) {
+    errors.push("taxonomy.category must match category.");
+  }
+  if (input.businessType !== undefined && taxonomy.subcategory !== undefined && businessType && taxonomyBusinessType && businessType !== taxonomyBusinessType) {
+    errors.push("taxonomy.subcategory must match businessType.");
+  }
   if (category && businessType && !businessTypeBelongsToCategory(category, businessType)) {
     errors.push(`${businessType} does not belong to ${category}.`);
   }
   if (hasState && !canonicalizeControlledValue(US_STATES, input.state)) errors.push(`state contains unsupported value: ${input.state}.`);
 
   Object.entries(DESIGN_FACETS).forEach(([field, allowed]) => {
-    const value = input[field] === undefined ? taxonomy.facets?.[field] : input[field];
-    if (value !== undefined) normalizeControlledArray(value, allowed, field, errors);
+    if (input[field] !== undefined) normalizeControlledArray(input[field], allowed, field, errors);
   });
+  validateFacetValues(taxonomy.facets, "taxonomy.facets", errors);
 
   if (!options.partial) {
     if (!hasBusinessType) errors.push("businessType is required.");
@@ -197,7 +289,7 @@ function validateDirectoryPayload(payload) {
   }
 
   const entries = [];
-  const errors = [];
+  const errors = validateDirectoryTaxonomy(payload.taxonomy);
   payload.entries.forEach((entry, index) => {
     const result = validateAndNormalizeEntry(entry);
     if (!result.ok) {
@@ -210,7 +302,7 @@ function validateDirectoryPayload(payload) {
   return {
     ok: errors.length === 0,
     entries,
-    taxonomy: isPlainObject(payload.taxonomy) ? payload.taxonomy : {},
+    taxonomy: normalizeDirectoryTaxonomy(payload.taxonomy),
     errors
   };
 }
@@ -219,10 +311,12 @@ module.exports = {
   ENTRY_FIELDS,
   isPlainObject,
   normalizeEntry,
+  normalizeDirectoryTaxonomy,
   normalizeFacetMap,
   normalizeStringArray,
   normalizeTaxonomyForEntry,
   validateAndNormalizeEntry,
   validateDirectoryPayload,
+  validateDirectoryTaxonomy,
   validateEntry
 };

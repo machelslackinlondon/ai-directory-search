@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("assert/strict");
 const { close, createTestServer, request, seed } = require("../helpers");
 const { createMemoryDirectoryStore } = require("../../src/server/directory/store");
+const { DESIGN_CATEGORIES, US_STATES } = require("../../src/server/directory/designTaxonomy");
 const { createFallbackSearchAdapter } = require("../../src/server/search/fallbackSearchAdapter");
 const { createAppServer } = require("../../src/server/http");
 
@@ -125,6 +126,49 @@ test("agent API returns grounded references", async () => {
   }
 });
 
+test("agent API preserves non-recoverable search status and code without retrying", async (t) => {
+  const cases = [
+    { statusCode: 400, code: "OPENSEARCH_BAD_REQUEST" },
+    { statusCode: 401, code: "OPENSEARCH_AUTHENTICATION_FAILED" },
+    { statusCode: 403, code: "OPENSEARCH_AUTHORIZATION_FAILED" },
+    { statusCode: 500, code: "OPENSEARCH_SCHEMA_MISMATCH" }
+  ];
+
+  for (const item of cases) {
+    await t.test(item.code, async () => {
+      let searchCalls = 0;
+      const error = Object.assign(new Error(`${item.code} response`), {
+        code: item.code,
+        ...(item.statusCode === 500 ? {} : { statusCode: item.statusCode })
+      });
+      const server = createAppServer({
+        store: createMemoryDirectoryStore(seed),
+        searchAdapter: {
+          async close() {},
+          async stats() { return { adapter: "opensearch" }; },
+          async search() {
+            searchCalls += 1;
+            throw error;
+          }
+        }
+      });
+      await listenForCloseTest(server);
+      const port = server.address().port;
+
+      try {
+        const response = await request(port, "POST", "/api/agent", {
+          question: "Show me Architecture"
+        });
+        assert.equal(response.statusCode, item.statusCode);
+        assert.equal(response.body.code, item.code);
+        assert.equal(searchCalls, 1);
+      } finally {
+        await close(server);
+      }
+    });
+  }
+});
+
 test("admin import flow upserts JSON entries and reindexes", async () => {
   const { server, port } = await createTestServer();
   try {
@@ -148,6 +192,80 @@ test("admin import flow upserts JSON entries and reindexes", async () => {
 
     const search = await request(port, "GET", "/api/search?query=integration%20import");
     assert.equal(search.body.results[0].id, "integration-design-import");
+  } finally {
+    await close(server);
+  }
+});
+
+test("admin import rejects taxonomy metadata that would expose builders or industrial facets", async () => {
+  const { server, port } = await createTestServer();
+  try {
+    const response = await request(port, "POST", "/api/admin/import", {
+      format: "json",
+      mode: "upsert",
+      content: JSON.stringify({
+        taxonomy: {
+          categories: [{ category: "Builders + Contractors", subcategories: ["General Contractor"] }],
+          facets: { services: ["Industrial"] }
+        },
+        entries: [{
+          id: "invalid-http-taxonomy",
+          name: "Invalid HTTP Taxonomy",
+          description: "Must not redefine the public taxonomy.",
+          category: "Architecture",
+          businessType: "Residential Architect",
+          state: "California"
+        }]
+      })
+    });
+
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.body.code, "VALIDATION_ERROR");
+    assert.match(response.body.error, /Builders \+ Contractors/);
+    assert.match(response.body.error, /Industrial/);
+
+    const taxonomy = await request(port, "GET", "/api/categories");
+    assert.deepEqual(taxonomy.body.categories, DESIGN_CATEGORIES);
+    assert.deepEqual(taxonomy.body.states, US_STATES);
+  } finally {
+    await close(server);
+  }
+});
+
+test("detail and category APIs await the public search adapter contract", async () => {
+  const store = createMemoryDirectoryStore(seed);
+  const adapterEntry = { ...seed.entries[0], name: "Adapter-backed Detail" };
+  let getEntryCalls = 0;
+  let listCategoryCalls = 0;
+  const server = createAppServer({
+    store,
+    searchAdapter: {
+      async close() {},
+      async getEntry(id) {
+        getEntryCalls += 1;
+        await new Promise((resolve) => setImmediate(resolve));
+        return id === adapterEntry.id ? adapterEntry : null;
+      },
+      async listCategories() {
+        listCategoryCalls += 1;
+        await new Promise((resolve) => setImmediate(resolve));
+        return DESIGN_CATEGORIES;
+      }
+    }
+  });
+  await listenForCloseTest(server);
+  const port = server.address().port;
+
+  try {
+    const detail = await request(port, "GET", `/api/entries/${adapterEntry.id}`);
+    const taxonomy = await request(port, "GET", "/api/categories");
+
+    assert.equal(detail.statusCode, 200);
+    assert.equal(detail.body.name, "Adapter-backed Detail");
+    assert.equal(getEntryCalls, 1);
+    assert.equal(listCategoryCalls, 1);
+    assert.deepEqual(taxonomy.body.categories, DESIGN_CATEGORIES);
+    assert.deepEqual(taxonomy.body.states, US_STATES);
   } finally {
     await close(server);
   }

@@ -97,26 +97,12 @@ function applyLowConfidenceGuard(question, searchResponse) {
 }
 
 async function searchViaMcp(params, context) {
-  try {
-    return await callMcpTool("search_directory", params, context);
-  } catch (firstError) {
-    try {
-      return await callMcpTool("search_directory", params, context);
-    } catch (secondError) {
-      const error = new Error("Unable to retrieve directory results at this time.");
-      error.cause = secondError || firstError;
-      throw error;
-    }
-  }
+  return await callMcpTool("search_directory", params, context);
 }
 
 async function executeSearch(route, params, context) {
   if (route.mode === "graphql") {
-    try {
-      return await context.searchAdapter.search(params);
-    } catch (error) {
-      return searchViaMcp(params, context);
-    }
+    return await context.searchAdapter.search(params);
   }
 
   if (route.mode === "mcp") {

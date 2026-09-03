@@ -23,6 +23,19 @@ test("result cards render safe relevance labels", () => {
   assert.doesNotMatch(html, /<Modern>/);
 });
 
+test("detail links render only absolute HTTP and HTTPS URLs", () => {
+  const entry = seed.entries.find(({ id }) => id === "atelier-north-architecture");
+
+  assert.match(renderers.renderDetail({ ...entry, url: "https://example.com/profile" }), /href="https:\/\/example\.com\/profile"/);
+  assert.match(renderers.renderDetail({ ...entry, url: "http://example.com/profile" }), /href="http:\/\/example\.com\/profile"/);
+
+  for (const url of ["javascript:alert(1)", "data:text/html,unsafe", "/relative/profile", "not a URL", ""]) {
+    const html = renderers.renderDetail({ ...entry, url });
+    assert.doesNotMatch(html, /class="record-link"/, url);
+    assert.doesNotMatch(html, /javascript:|data:text\/html/, url);
+  }
+});
+
 test("filter markup has canonical controls and accessible progressive disclosure", () => {
   const html = fs.readFileSync(path.join(process.cwd(), "public", "index.html"), "utf8");
 
