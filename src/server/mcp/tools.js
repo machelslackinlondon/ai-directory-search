@@ -32,7 +32,7 @@ async function callMcpTool(name, args = {}, context) {
   const searchAdapter = context.searchAdapter;
 
   if (name === "search_directory") {
-    return searchAdapter.search({
+    return await searchAdapter.search({
       query: args.query || "",
       filters: args.filters || {},
       sort: args.sort || "relevance",
@@ -58,24 +58,24 @@ async function callMcpTool(name, args = {}, context) {
   if (name === "upsert_directory_entry") {
     requireAdmin(args);
     const entry = store.upsertEntry(args.entry);
-    searchAdapter.reindex();
+    await searchAdapter.reindex();
     return entry;
   }
 
   if (name === "delete_directory_entry") {
     requireAdmin(args);
     const deleted = store.deleteEntry(args.id);
-    searchAdapter.reindex();
+    await searchAdapter.reindex();
     return { deleted, id: args.id };
   }
 
   if (name === "reindex_directory") {
     requireAdmin(args);
-    return searchAdapter.reindex();
+    return await searchAdapter.reindex();
   }
 
   if (name === "get_index_stats") {
-    return searchAdapter.stats();
+    return await searchAdapter.stats();
   }
 
   throw new Error(`Unhandled MCP tool: ${name}`);

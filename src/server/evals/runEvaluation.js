@@ -34,7 +34,7 @@ async function runEvaluation(options = {}) {
 
   for (const item of cases) {
     const started = process.hrtime.bigint();
-    const response = searchAdapter.search({ query: item.query, limit: 5, mode: "keyword" });
+    const response = await searchAdapter.search({ query: item.query, limit: 5, mode: "keyword" });
     const agent = await answerDirectoryQuestion(item.query, { store, searchAdapter }, { limit: 3 });
     const latencyMs = Number(process.hrtime.bigint() - started) / 1000000;
     const resultIds = response.results.map((result) => result.id);

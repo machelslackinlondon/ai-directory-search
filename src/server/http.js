@@ -106,7 +106,7 @@ function createAppServer(options = {}) {
 
   async function routeApi(req, res, url) {
     if (req.method === "GET" && url.pathname === "/api/search") {
-      const payload = context.searchAdapter.search({
+      const payload = await context.searchAdapter.search({
         query: url.searchParams.get("query") || "",
         filters: parseFilters(url.searchParams),
         sort: url.searchParams.get("sort") || "relevance",
@@ -132,7 +132,7 @@ function createAppServer(options = {}) {
     }
 
     if (req.method === "GET" && url.pathname === "/api/stats") {
-      sendJson(res, 200, context.searchAdapter.stats());
+      sendJson(res, 200, await context.searchAdapter.stats());
       return true;
     }
 
@@ -159,7 +159,7 @@ function createAppServer(options = {}) {
         format: body.format || "json",
         mode: body.mode || "upsert"
       });
-      const stats = context.searchAdapter.reindex();
+      const stats = await context.searchAdapter.reindex();
       sendJson(res, 200, { ...result, stats });
       return true;
     }
@@ -167,7 +167,7 @@ function createAppServer(options = {}) {
     if (req.method === "POST" && url.pathname === "/api/admin/reindex") {
       const body = await readBody(req);
       requireAdminRequest(req, body);
-      sendJson(res, 200, context.searchAdapter.reindex());
+      sendJson(res, 200, await context.searchAdapter.reindex());
       return true;
     }
 

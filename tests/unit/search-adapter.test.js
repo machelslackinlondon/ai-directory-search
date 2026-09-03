@@ -3,16 +3,16 @@ const assert = require("assert/strict");
 const { createTestContext } = require("../helpers");
 const { entryMatchesFilters } = require("../../src/server/search/memorySearchAdapter");
 
-test("keyword ranking places the most relevant entry first", () => {
+test("keyword ranking places the most relevant entry first", async () => {
   const { searchAdapter } = createTestContext();
-  const response = searchAdapter.search({ query: "modern residential architecture renovation", limit: 5 });
+  const response = await searchAdapter.search({ query: "modern residential architecture renovation", limit: 5 });
   assert.equal(response.results[0].id, "atelier-north-architecture");
   assert.ok(response.results[0].whyMatched.includes("tags") || response.results[0].whyMatched.includes("description"));
 });
 
-test("filter logic narrows by category and tags", () => {
+test("filter logic narrows by category and tags", async () => {
   const { searchAdapter } = createTestContext();
-  const response = searchAdapter.search({
+  const response = await searchAdapter.search({
     query: "modern residential",
     filters: {
       category: "Architecture",
@@ -39,9 +39,9 @@ test("entryMatchesFilters supports facets", () => {
   }), false);
 });
 
-test("sort controls produce deterministic name ordering", () => {
+test("sort controls produce deterministic name ordering", async () => {
   const { searchAdapter } = createTestContext();
-  const response = searchAdapter.search({ query: "", sort: "name", limit: 3 });
+  const response = await searchAdapter.search({ query: "", sort: "name", limit: 3 });
   assert.deepEqual(response.results.map((result) => result.entry.name), [
     "Atelier North Architecture",
     "Civic Form Architects",
@@ -49,11 +49,23 @@ test("sort controls produce deterministic name ordering", () => {
   ]);
 });
 
-test("local semantic provider is optional and reports availability", () => {
+test("local semantic provider is optional and reports availability", async () => {
   const { searchAdapter } = createTestContext({ searchOptions: { semanticProvider: "local-hash" } });
-  const stats = searchAdapter.stats();
-  const response = searchAdapter.search({ query: "outdoor landscape design", mode: "hybrid" });
+  const stats = await searchAdapter.stats();
+  const response = await searchAdapter.search({ query: "outdoor landscape design", mode: "hybrid" });
   assert.equal(stats.semanticEnabled, true);
   assert.equal(response.semanticAvailable, true);
   assert.ok(response.results.length > 0);
+});
+
+test("preference matches use OR, boost additional matches, and expose baseline counts", async () => {
+  const { searchAdapter } = createTestContext();
+  const response = await searchAdapter.search({
+    query: "",
+    filters: { rooms: ["Kitchen"], styles: ["Modern"] }
+  });
+  assert.ok(response.results.every(({ matchLabels }) => matchLabels.length >= 1));
+  assert.equal(response.results[0].id, "atelier-north-architecture");
+  assert.ok(response.facets.rooms.some(({ label, count }) => label === "Kitchen" && count > 0));
+  assert.equal(response.backend, "memory");
 });

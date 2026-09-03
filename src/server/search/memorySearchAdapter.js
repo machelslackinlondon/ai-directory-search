@@ -1,5 +1,12 @@
 const { expandQueryTerms } = require("../directory/taxonomy");
 const { normalizeText, tokenize, unique } = require("../utils/text");
+const {
+  buildFacetCounts,
+  buildMatchLabels,
+  entryMatchesAnyPreference,
+  entryMatchesPrimaryFilters,
+  normalizeSearchFilters
+} = require("./searchContract");
 
 const FIELD_WEIGHTS = {
   name: 8,
@@ -66,33 +73,25 @@ function cosineSimilarity(a, b) {
 }
 
 function parseFilters(filters = {}) {
+  const facetFilters = filters.facets || {};
   return {
-    category: filters.category || "",
-    subcategory: filters.subcategory || "",
-    tags: Array.isArray(filters.tags) ? filters.tags.filter(Boolean) : String(filters.tags || "").split(",").map((tag) => tag.trim()).filter(Boolean),
+    ...normalizeSearchFilters({
+      ...filters,
+      rooms: filters.rooms || facetFilters.rooms,
+      projectTypes: filters.projectTypes || facetFilters.projectTypes,
+      styles: filters.styles || facetFilters.styles,
+      services: filters.services || facetFilters.services
+    }),
     location: filters.location || "",
-    facets: filters.facets || {},
     metadata: filters.metadata || {}
   };
 }
 
 function entryMatchesFilters(entry, filters = {}) {
   const normalized = parseFilters(filters);
-  const taxonomy = entry.taxonomy || {};
-
-  if (normalized.category && normalizeText(entry.category) !== normalizeText(normalized.category)) return false;
-  if (normalized.subcategory && normalizeText(taxonomy.subcategory) !== normalizeText(normalized.subcategory)) return false;
+  if (!entryMatchesPrimaryFilters(entry, normalized)) return false;
+  if (!entryMatchesAnyPreference(entry, normalized)) return false;
   if (normalized.location && !normalizeText(entry.location).includes(normalizeText(normalized.location))) return false;
-
-  const entryTags = (entry.tags || []).map(normalizeText);
-  if (normalized.tags.length > 0 && !normalized.tags.every((tag) => entryTags.includes(normalizeText(tag)))) return false;
-
-  for (const [facet, value] of Object.entries(normalized.facets || {})) {
-    const wanted = Array.isArray(value) ? value : [value];
-    const actual = (taxonomy.facets && taxonomy.facets[facet]) || [];
-    const actualText = actual.map(normalizeText);
-    if (!wanted.every((item) => actualText.includes(normalizeText(item)))) return false;
-  }
 
   for (const [key, value] of Object.entries(normalized.metadata || {})) {
     if (!normalizeText(flattenObject(entry.metadata && entry.metadata[key])).includes(normalizeText(value))) return false;
@@ -171,19 +170,7 @@ function createMemorySearchAdapter(store, options = {}) {
     return (options.semanticProvider || process.env.SEMANTIC_PROVIDER) === "local-hash";
   }
 
-  function reindex() {
-    indexVersion += 1;
-    indexedAt = new Date().toISOString();
-    documentVectors = new Map();
-    if (semanticEnabled()) {
-      store.listEntries().forEach((entry) => {
-        documentVectors.set(entry.id, vectorize(makeDocumentText(entry)));
-      });
-    }
-    return stats();
-  }
-
-  function stats() {
+  function makeStats() {
     const entries = store.listEntries();
     return {
       adapter: "memory",
@@ -197,8 +184,24 @@ function createMemorySearchAdapter(store, options = {}) {
     };
   }
 
-  function search(params = {}) {
-    if (!indexedAt) reindex();
+  function rebuildIndex() {
+    indexVersion += 1;
+    indexedAt = new Date().toISOString();
+    documentVectors = new Map();
+    if (semanticEnabled()) {
+      store.listEntries().forEach((entry) => {
+        documentVectors.set(entry.id, vectorize(makeDocumentText(entry)));
+      });
+    }
+    return makeStats();
+  }
+
+  async function reindex() {
+    return rebuildIndex();
+  }
+
+  function runSearch(params = {}) {
+    if (!indexedAt) rebuildIndex();
     const started = process.hrtime.bigint();
     const query = params.query || "";
     const sort = params.sort || "relevance";
@@ -206,14 +209,24 @@ function createMemorySearchAdapter(store, options = {}) {
     const offset = Math.max(0, Number(params.offset) || 0);
     const mode = params.mode || "keyword";
     const taxonomy = store.getTaxonomy();
+    const filters = parseFilters(params.filters || {});
     const expanded = expandQueryTerms(query, taxonomy);
     const queryVector = semanticEnabled() && query ? vectorize(query) : null;
 
-    let results = store.listEntries()
-      .filter((entry) => entryMatchesFilters(entry, params.filters || {}))
+    const primaryEntries = store.listEntries()
+      .filter((entry) => entryMatchesPrimaryFilters(entry, filters))
+      .filter((entry) => !filters.location || normalizeText(entry.location).includes(normalizeText(filters.location)))
+      .filter((entry) => Object.entries(filters.metadata).every(([key, value]) =>
+        normalizeText(flattenObject(entry.metadata && entry.metadata[key])).includes(normalizeText(value))
+      ));
+    const facets = buildFacetCounts(primaryEntries, taxonomy);
+
+    let results = primaryEntries
+      .filter((entry) => entryMatchesAnyPreference(entry, filters))
       .map((entry) => {
         const scored = scoreEntry(entry, query, expanded);
-        let score = scored.score;
+        const matchLabels = buildMatchLabels(entry, filters);
+        let score = scored.score + (4 * matchLabels.length);
         let semanticScore = 0;
         if (queryVector && (mode === "semantic" || mode === "hybrid")) {
           semanticScore = cosineSimilarity(queryVector, documentVectors.get(entry.id) || vectorize(makeDocumentText(entry)));
@@ -224,6 +237,7 @@ function createMemorySearchAdapter(store, options = {}) {
           entry,
           score: Number(score.toFixed(4)),
           semanticScore: Number(semanticScore.toFixed(4)),
+          matchLabels,
           matchedFields: scored.matchedFields,
           reasons: scored.reasons,
           whyMatched: scored.reasons.length > 0 ? scored.reasons.join("; ") : "matched by ranking fallback"
@@ -244,23 +258,26 @@ function createMemorySearchAdapter(store, options = {}) {
       query,
       mode: semanticEnabled() ? mode : "keyword",
       semanticAvailable: semanticEnabled(),
-      filters: parseFilters(params.filters || {}),
+      filters,
       sort,
       total,
       tookMs: Number(elapsedMs.toFixed(3)),
+      backend: "memory",
+      fallback: false,
+      facets,
       results: sorted
     };
   }
 
-  reindex();
+  rebuildIndex();
 
   return {
     name: "memory",
-    getEntry: store.getEntry,
-    listCategories: () => store.getTaxonomy().categories,
+    async getEntry(id) { return store.getEntry(id); },
+    async listCategories() { return store.getTaxonomy().categories; },
     reindex,
-    search,
-    stats
+    async search(params) { return runSearch(params); },
+    async stats() { return makeStats(); }
   };
 }
 
