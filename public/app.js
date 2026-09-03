@@ -13,6 +13,7 @@ const state = {
   categories: [],
   selectedId: null,
   results: [],
+  total: 0,
   detail: null,
   agent: null,
   agentLoading: false,
@@ -241,7 +242,7 @@ function renderFilterControls() {
 function render() {
   renderActivityLog();
   renderFilterControls();
-  elements.resultCount.textContent = `${state.results.length} ${state.results.length === 1 ? "entry" : "entries"}`;
+  elements.resultCount.textContent = `${state.total} ${state.total === 1 ? "entry" : "entries"}`;
   if (state.loading) {
     elements.results.innerHTML = renderers.renderState("Searching directory...", "loading");
   } else if (state.error) {
@@ -299,6 +300,7 @@ async function runSearch() {
     const response = await api(searchUrl());
     if (requestId !== state.searchRequestId) return;
     state.results = response.results || [];
+    state.total = Number.isInteger(response.total) ? response.total : state.results.length;
     state.facets = response.facets || {};
     state.knownStates = [...new Set([
       ...state.knownStates,
@@ -315,6 +317,7 @@ async function runSearch() {
     if (requestId !== state.searchRequestId) return;
     state.error = error.message;
     state.results = [];
+    state.total = 0;
     state.detail = null;
     logInteraction("Search failed", { error: error.message }, "error");
   } finally {

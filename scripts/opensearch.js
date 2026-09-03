@@ -4,6 +4,9 @@ const { createOpenSearchClient } = require("../src/server/search/opensearch/clie
 const { createOpenSearchSearchAdapter } = require("../src/server/search/opensearchSearchAdapter");
 
 async function main(command = process.argv[2]) {
+  if (!["wait", "bootstrap", "reindex", "verify"].includes(command)) {
+    throw Object.assign(new Error("Usage: node scripts/opensearch.js <wait|bootstrap|reindex|verify>"), { code: "BAD_COMMAND" });
+  }
   const store = createDirectoryStore();
   const adapter = createOpenSearchSearchAdapter(store, { client: createOpenSearchClient() });
   try {
@@ -11,7 +14,6 @@ async function main(command = process.argv[2]) {
     if (command === "bootstrap") return console.log(JSON.stringify(await adapter.bootstrap(), null, 2));
     if (command === "reindex") return console.log(JSON.stringify(await adapter.reindex(), null, 2));
     if (command === "verify") return console.log(JSON.stringify(await adapter.verify(), null, 2));
-    throw Object.assign(new Error("Usage: node scripts/opensearch.js <wait|bootstrap|reindex|verify>"), { code: "BAD_COMMAND" });
   } finally {
     await adapter.close();
   }

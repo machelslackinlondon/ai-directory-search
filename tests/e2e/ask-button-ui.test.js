@@ -296,6 +296,42 @@ test("state selection and chip survive a zero-result facet response", async () =
   assert.match(document.elements["#applied-filter-chips"].innerHTML, /California/);
 });
 
+test("result count announces the backend total instead of the current page length", async () => {
+  const document = createFakeDocument();
+  const appJs = fs.readFileSync(path.join(process.cwd(), "public", "app.js"), "utf8");
+  const context = {
+    console: { info: () => {} },
+    document,
+    setTimeout,
+    clearTimeout,
+    URLSearchParams,
+    window: { DirectoryRenderers: renderers },
+    fetch: async (url) => {
+      if (url === "/api/categories") return { ok: true, json: async () => ({ categories: [], facets: {} }) };
+      if (url === "/api/stats") return { ok: true, json: async () => ({ entries: 6 }) };
+      if (String(url).startsWith("/api/search")) {
+        return {
+          ok: true,
+          json: async () => ({
+            total: 6,
+            results: [{
+              id: "atelier-north-architecture",
+              entry: { id: "atelier-north-architecture", name: "Atelier North", category: "Architecture", description: "Modern homes.", tags: [] }
+            }],
+            facets: {}
+          })
+        };
+      }
+      throw new Error(`Unexpected URL ${url}`);
+    }
+  };
+
+  vm.runInNewContext(appJs, context, { filename: "public/app.js" });
+  await settle();
+
+  assert.equal(document.elements["#result-count"].textContent, "6 entries");
+});
+
 test("only the latest search response controls results, errors, and loading state", async () => {
   const document = createFakeDocument();
   const appJs = fs.readFileSync(path.join(process.cwd(), "public", "app.js"), "utf8");
