@@ -146,3 +146,28 @@ test("server close reports one safe aggregate adapter cleanup failure", async ()
   assert.equal(JSON.stringify({ message: error.message, ...error }).includes(primarySecret), false);
   assert.equal(JSON.stringify({ message: error.message, ...error }).includes(memorySecret), false);
 });
+
+test("server close contains a throwing callback after cleanup", async () => {
+  let closed = 0;
+  const server = createAppServer({
+    store: createMemoryDirectoryStore({ entries: [] }),
+    searchAdapter: { async close() { closed += 1; } }
+  });
+  await listenForCloseTest(server);
+
+  const unhandled = [];
+  const onUnhandledRejection = (reason) => unhandled.push(reason);
+  process.on("unhandledRejection", onUnhandledRejection);
+  try {
+    await new Promise((resolve) => server.close(() => {
+      resolve();
+      throw new Error("callback-failure");
+    }));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.equal(closed, 1);
+    assert.deepEqual(unhandled, []);
+  } finally {
+    process.removeListener("unhandledRejection", onUnhandledRejection);
+  }
+});

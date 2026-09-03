@@ -234,13 +234,24 @@ function createAppServer(options = {}) {
     return adapterClosePromise;
   }
 
+  function invokeCloseCallback(callback, error) {
+    if (typeof callback !== "function") return;
+    try {
+      Promise.resolve(callback(error)).catch(() => {
+        server.closeCallbackFailed = true;
+      });
+    } catch {
+      server.closeCallbackFailed = true;
+    }
+  }
+
   server.close = function close(callback) {
     const complete = (serverError) => {
       closeAdapterOnce().then(
-        () => callback?.(serverError),
+        () => invokeCloseCallback(callback, serverError),
         (adapterError) => {
           server.shutdownError = adapterError;
-          callback?.(serverError || adapterError);
+          invokeCloseCallback(callback, serverError || adapterError);
         }
       );
     };
