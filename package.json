@@ -23,5 +23,9 @@
     "mcp",
     "local-first"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@opensearch-project/opensearch": "^3.6.0",
+    "dotenv": "^17.4.2"
+  }
 }
