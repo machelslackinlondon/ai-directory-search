@@ -11,19 +11,67 @@ const {
 const { buildSearchBody } = require("./opensearch/query");
 const { parseSearchResponse } = require("./opensearch/response");
 
+const SAFE_ERROR = Symbol("safeOpenSearchError");
+const AVAILABILITY_CODES = new Set(["ECONNREFUSED", "ECONNRESET", "ENOTFOUND", "EAI_AGAIN", "ETIMEDOUT"]);
+
 function bodyOf(response) {
   return response && response.body !== undefined ? response.body : response;
 }
 
 function statusCodeOf(error) {
-  return error?.statusCode || error?.meta?.statusCode || error?.meta?.body?.status;
+  return error?.statusCode || error?.meta?.statusCode || error?.meta?.body?.status || error?.body?.status;
 }
 
 function operationError(code, message, details) {
   const error = new Error(message);
   error.code = code;
   if (details !== undefined) error.details = details;
+  error[SAFE_ERROR] = true;
   return error;
+}
+
+function errorBodyOf(error) {
+  return error?.meta?.body || error?.body || {};
+}
+
+function normalizedErrorType(error) {
+  const body = errorBodyOf(error);
+  const type = body.error?.type;
+  return typeof type === "string" && /^[a-z0-9_]+$/i.test(type) ? type : null;
+}
+
+function normalizeOpenSearchError(error) {
+  if (error?.[SAFE_ERROR]) return error;
+  const statusCode = Number(statusCodeOf(error)) || null;
+  const type = normalizedErrorType(error);
+  let code = "OPENSEARCH_REQUEST_FAILED";
+  if (type === "alias_missing_exception") code = "OPENSEARCH_ALIAS_MISSING";
+  else if (type === "index_not_found_exception") code = "OPENSEARCH_INDEX_MISSING";
+  else if (statusCode === 401) code = "OPENSEARCH_AUTHENTICATION_FAILED";
+  else if (statusCode === 403) code = "OPENSEARCH_AUTHORIZATION_FAILED";
+  else if (statusCode === 400) code = "OPENSEARCH_BAD_REQUEST";
+  else if ([429, 502, 503, 504].includes(statusCode) || AVAILABILITY_CODES.has(error?.code) || ["ConnectionError", "TimeoutError"].includes(error?.name)) {
+    code = "OPENSEARCH_UNAVAILABLE";
+  }
+  const messages = {
+    OPENSEARCH_ALIAS_MISSING: "The OpenSearch alias is missing",
+    OPENSEARCH_INDEX_MISSING: "The OpenSearch index is missing",
+    OPENSEARCH_AUTHENTICATION_FAILED: "OpenSearch authentication failed",
+    OPENSEARCH_AUTHORIZATION_FAILED: "OpenSearch authorization failed",
+    OPENSEARCH_BAD_REQUEST: "OpenSearch rejected the request",
+    OPENSEARCH_UNAVAILABLE: "OpenSearch is unavailable",
+    OPENSEARCH_REQUEST_FAILED: "The OpenSearch request failed"
+  };
+  const normalized = operationError(code, messages[code]);
+  if (statusCode) normalized.statusCode = statusCode;
+  if (type) normalized.type = type;
+  return normalized;
+}
+
+function isRecoverableAvailabilityError(error) {
+  return error?.code === "OPENSEARCH_UNAVAILABLE" && (
+    error.statusCode == null || [429, 502, 503, 504].includes(error.statusCode)
+  );
 }
 
 function createOpenSearchSearchAdapter(store, options = {}) {
@@ -44,7 +92,7 @@ function createOpenSearchSearchAdapter(store, options = {}) {
       return Object.keys(aliases);
     } catch (error) {
       if (statusCodeOf(error) === 404) return [];
-      throw error;
+      throw normalizeOpenSearchError(error);
     }
   }
 
@@ -68,6 +116,17 @@ function createOpenSearchSearchAdapter(store, options = {}) {
     return checks;
   }
 
+  async function verifyMapping(physicalIndex) {
+    const mappings = bodyOf(await client.indices.getMapping({ index: physicalIndex })) || {};
+    const mapping = mappings[physicalIndex]?.mappings || {};
+    if (mapping._meta?.schema_version !== SCHEMA_VERSION || mapping.dynamic !== "strict") {
+      throw operationError(
+        "OPENSEARCH_SCHEMA_MISMATCH",
+        `OpenSearch index ${physicalIndex} does not use the required schema`
+      );
+    }
+  }
+
   async function bootstrap() {
     await installTemplate();
     const aliasExists = Boolean(bodyOf(await client.indices.existsAlias({ name: alias })));
@@ -79,6 +138,7 @@ function createOpenSearchSearchAdapter(store, options = {}) {
         throw operationError("OPENSEARCH_ALIAS_INVALID", `OpenSearch alias ${alias} must have exactly one target`);
       }
       [physicalIndex] = targets;
+      await verifyMapping(physicalIndex);
     } else {
       physicalIndex = makePhysicalIndexName(now());
       await client.indices.create({ index: physicalIndex });
@@ -156,13 +216,18 @@ function createOpenSearchSearchAdapter(store, options = {}) {
   }
 
   async function search(params = {}) {
-    const response = await client.search({ index: alias, body: buildSearchBody(params) });
-    return parseSearchResponse(response, params, store.getTaxonomy(), { backend: "opensearch" });
+    try {
+      const response = await client.search({ index: alias, body: buildSearchBody(params) });
+      return parseSearchResponse(response, params, store.getTaxonomy(), { backend: "opensearch" });
+    } catch (error) {
+      throw normalizeOpenSearchError(error);
+    }
   }
 
   async function getEntry(id) {
     try {
       const result = bodyOf(await client.get({ index: alias, id })) || {};
+      if (result.found === false) return null;
       if (!result._source?.profile) {
         throw operationError(
           "OPENSEARCH_DOCUMENT_INVALID",
@@ -171,8 +236,9 @@ function createOpenSearchSearchAdapter(store, options = {}) {
       }
       return result._source.profile;
     } catch (error) {
-      if (statusCodeOf(error) === 404) return null;
-      throw error;
+      const isMissingDocument = normalizedErrorType(error) === "document_missing_exception" || errorBodyOf(error).found === false;
+      if (statusCodeOf(error) === 404 && isMissingDocument) return null;
+      throw normalizeOpenSearchError(error);
     }
   }
 
@@ -236,15 +302,22 @@ function createOpenSearchSearchAdapter(store, options = {}) {
   async function waitForReady() {
     const deadline = now().getTime() + readyTimeoutMs;
     let lastError;
-    while (now().getTime() <= deadline) {
+    while (true) {
       try {
         const health = bodyOf(await client.cluster.health()) || {};
         if (health.status === "yellow" || health.status === "green") return health;
-        lastError = operationError("OPENSEARCH_NOT_READY", `OpenSearch cluster health is ${health.status || "unknown"}`);
+        if (health.status !== "red") {
+          throw operationError("OPENSEARCH_REQUEST_FAILED", "OpenSearch returned an invalid health response");
+        }
+        lastError = operationError("OPENSEARCH_NOT_READY", "OpenSearch cluster is not ready");
       } catch (error) {
-        lastError = error;
+        const normalized = normalizeOpenSearchError(error);
+        if (!isRecoverableAvailabilityError(normalized)) throw normalized;
+        lastError = normalized;
       }
-      await sleep(500);
+      const remaining = deadline - now().getTime();
+      if (remaining <= 0) break;
+      await sleep(Math.min(500, remaining));
     }
     throw operationError("OPENSEARCH_NOT_READY", "OpenSearch did not become ready before the deadline", {
       causeCode: lastError?.code || null
@@ -255,17 +328,25 @@ function createOpenSearchSearchAdapter(store, options = {}) {
     if (typeof client.close === "function") await client.close();
   }
 
+  async function safely(operation, ...args) {
+    try {
+      return await operation(...args);
+    } catch (error) {
+      throw normalizeOpenSearchError(error);
+    }
+  }
+
   return {
     name: "opensearch",
-    bootstrap,
-    close,
-    getEntry,
-    listCategories,
-    reindex,
-    search,
-    stats,
-    verify,
-    waitForReady
+    bootstrap: () => safely(bootstrap),
+    close: () => safely(close),
+    getEntry: (id) => safely(getEntry, id),
+    listCategories: () => safely(listCategories),
+    reindex: () => safely(reindex),
+    search: (params) => safely(search, params),
+    stats: () => safely(stats),
+    verify: () => safely(verify),
+    waitForReady: () => safely(waitForReady)
   };
 }
 
