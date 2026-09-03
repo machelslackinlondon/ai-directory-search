@@ -1,5 +1,6 @@
 require("dotenv").config({ quiet: true });
 const { createAppServer } = require("./http");
+const { formatStartupSearchStats } = require("./search/searchStats");
 
 const port = Number(process.env.PORT) || 3000;
 const host = process.env.HOST || "127.0.0.1";
@@ -9,7 +10,7 @@ server.listen(port, host, async () => {
   console.log(`AI directory search app running at http://${host}:${port}`);
   try {
     const stats = await server.context.searchAdapter.stats();
-    console.log(`Loaded ${stats.entries} entries with ${stats.adapter} index.`);
+    console.log(formatStartupSearchStats(stats));
   } catch (error) {
     console.error("Unable to load search index stats:", error);
   }

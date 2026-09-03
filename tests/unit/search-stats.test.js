@@ -1,0 +1,20 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const { formatStartupSearchStats } = require("../../src/server/search/searchStats");
+
+test("startup summary reports the active backend and warm memory count for fallback stats", () => {
+  assert.equal(formatStartupSearchStats({
+    adapter: "fallback",
+    backend: "opensearch",
+    fallback: false,
+    memory: { adapter: "memory", entries: 6 },
+    opensearch: { adapter: "opensearch", entries: 6 }
+  }), "Loaded 6 entries with opensearch index.");
+});
+
+test("startup summary preserves the direct memory adapter shape", () => {
+  assert.equal(
+    formatStartupSearchStats({ adapter: "memory", entries: 6 }),
+    "Loaded 6 entries with memory index."
+  );
+});
