@@ -23,6 +23,7 @@ function facetCount(result, facet, label) {
   return result.facets[facet].find((item) => item.label === label)?.count;
 }
 
+test.describe("OpenSearch live integration", () => {
 if (live) {
   test.before(async () => {
     store = createDirectoryStore();
@@ -154,4 +155,5 @@ liveTest("facet aggregations report canonical counts for all indexed documents",
   assert.equal(facetCount(result, "rooms", "Kitchen"), 3);
   assert.equal(facetCount(result, "styles", "Modern"), 4);
   assert.equal(facetCount(result, "services", "Consultation"), 4);
+});
 });
