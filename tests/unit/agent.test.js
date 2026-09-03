@@ -61,6 +61,35 @@ test("filter inference recognizes every canonical design filter", () => {
   });
 });
 
+test("filter inference rejects canonical labels embedded inside larger tokens", () => {
+  const context = createTestContext();
+  const filters = inferFilters(
+    "The postmodern architecture team remained responsive",
+    context.store.getTaxonomy()
+  );
+
+  assert.equal(filters.category, "Architecture");
+  assert.equal(filters.state, undefined);
+  assert.equal(filters.styles, undefined);
+  assert.equal(Boolean(filters.tags?.includes("modern")), false);
+});
+
+test("filter inference keeps normalized phrases and longest canonical labels", () => {
+  const context = createTestContext();
+  const filters = inferFilters(
+    "Modern Interior Design + Décor by an Interior Design Consultant in Maine for a Living Room New Build with Full service Design",
+    context.store.getTaxonomy()
+  );
+
+  assert.equal(filters.category, "Interior Design + Decor");
+  assert.equal(filters.businessType, "Interior Design Consultant");
+  assert.equal(filters.state, "Maine");
+  assert.deepEqual(filters.rooms, ["Living Room"]);
+  assert.deepEqual(filters.projectTypes, ["New Build"]);
+  assert.deepEqual(filters.styles, ["Modern"]);
+  assert.deepEqual(filters.services, ["Full-service Design"]);
+});
+
 test("agent keeps low OpenSearch BM25 scores and exposes match labels in results and explanations", async () => {
   const base = createTestContext();
   let searchParams;

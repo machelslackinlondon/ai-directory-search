@@ -61,6 +61,31 @@ test("directory intelligence recognizes canonical business, state, and preferenc
   assert.equal(route.path, "deterministic");
 });
 
+test("directory intelligence rejects canonical constraints embedded inside larger tokens", () => {
+  const context = createTestContext();
+  const remained = classifyDirectoryQuery("remained responsive", { store: context.store });
+  const postmodern = classifyDirectoryQuery("postmodern architecture", {
+    taxonomy: {
+      categories: [],
+      tags: [],
+      facets: { styles: ["Modern"] }
+    }
+  });
+
+  assert.equal(remained.mode, "hybrid");
+  assert.equal(postmodern.mode, "hybrid");
+});
+
+test("directory intelligence keeps normalized whole canonical phrases", () => {
+  const context = createTestContext();
+  const queries = ["Maine", "Modern", "Full service Design", "Interior Design + Décor"];
+
+  queries.forEach((query) => {
+    const route = classifyDirectoryQuery(query, { store: context.store });
+    assert.equal(route.mode, "graphql", query);
+  });
+});
+
 test("directory autocomplete includes canonical states", () => {
   const context = createTestContext();
   const suggestions = searchSuggestions("cal", { store: context.store });

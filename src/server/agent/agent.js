@@ -4,6 +4,7 @@ const { callMcpTool } = require("../mcp/tools");
 const {
   classifyDirectoryQuery,
   formatDirectoryResult,
+  includesNormalizedPhrase,
   searchSuggestions
 } = require("./directoryIntelligence");
 
@@ -14,7 +15,7 @@ function inferFilters(question, taxonomy, suppliedFilters = {}) {
   function matchingLabel(labels) {
     return [...labels]
       .sort((a, b) => normalizeText(b).length - normalizeText(a).length)
-      .find((label) => text.includes(normalizeText(label)));
+      .find((label) => includesNormalizedPhrase(text, label));
   }
 
   if (!filters.category) {
@@ -37,14 +38,14 @@ function inferFilters(question, taxonomy, suppliedFilters = {}) {
   Object.entries(DESIGN_FACETS).forEach(([field, defaults]) => {
     const selected = new Set(Array.isArray(filters[field]) ? filters[field] : []);
     (taxonomy.facets?.[field] || defaults).forEach((label) => {
-      if (text.includes(normalizeText(label))) selected.add(label);
+      if (includesNormalizedPhrase(text, label)) selected.add(label);
     });
     if (selected.size > 0) filters[field] = Array.from(selected);
   });
 
   const tags = new Set(Array.isArray(filters.tags) ? filters.tags : []);
   (taxonomy.tags || []).forEach((tag) => {
-    if (text.includes(normalizeText(tag))) tags.add(tag);
+    if (includesNormalizedPhrase(text, tag)) tags.add(tag);
   });
   if (tags.size > 0) filters.tags = Array.from(tags);
 

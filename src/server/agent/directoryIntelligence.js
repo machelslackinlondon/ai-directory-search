@@ -37,6 +37,12 @@ function phraseMatches(text, phrases) {
   return phrases.some((phrase) => text.includes(phrase));
 }
 
+function includesNormalizedPhrase(text, phrase) {
+  const normalizedText = normalizeText(text);
+  const normalizedPhrase = normalizeText(phrase);
+  return Boolean(normalizedPhrase) && ` ${normalizedText} `.includes(` ${normalizedPhrase} `);
+}
+
 function hasPaginationOrSorting(query, options = {}) {
   const text = normalizeText(query);
   if (options.offset || (options.sort && options.sort !== "relevance")) return true;
@@ -55,7 +61,7 @@ function hasExplicitConstraint(query, taxonomy = {}) {
   const states = US_STATES.map(normalizeText);
   const preferences = Object.values(taxonomy.facets || {}).flat().map(normalizeText);
   return [...categories, ...businessTypes, ...states, ...preferences, ...tags]
-    .some((term) => term && text.includes(term));
+    .some((term) => includesNormalizedPhrase(text, term));
 }
 
 function isAutocompleteLike(query, taxonomy = {}) {
@@ -247,5 +253,6 @@ module.exports = {
   classifyDirectoryQuery,
   formatDirectoryResult,
   hasMeaningfulFilters,
+  includesNormalizedPhrase,
   searchSuggestions
 };
