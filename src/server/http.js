@@ -4,7 +4,7 @@ const path = require("path");
 const { URL } = require("url");
 const { answerDirectoryQuestion } = require("./agent/agent");
 const { createDirectoryStore } = require("./directory/store");
-const { createMemorySearchAdapter } = require("./search/memorySearchAdapter");
+const { createSearchAdapter } = require("./search/createSearchAdapter");
 const { callMcpTool, listMcpTools } = require("./mcp/tools");
 
 const MIME_TYPES = {
@@ -96,7 +96,7 @@ function requireAdminRequest(req, body = {}) {
 
 function createContext(options = {}) {
   const store = options.store || createDirectoryStore(options.storeOptions || {});
-  const searchAdapter = options.searchAdapter || createMemorySearchAdapter(store, options.searchOptions || {});
+  const searchAdapter = options.searchAdapter || createSearchAdapter(store, options.searchOptions || {});
   return { store, searchAdapter };
 }
 
@@ -223,6 +223,9 @@ function createAppServer(options = {}) {
   });
 
   server.context = context;
+  server.on("close", () => {
+    Promise.resolve(context.searchAdapter.close?.()).catch(() => {});
+  });
   return server;
 }
 

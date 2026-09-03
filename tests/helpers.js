@@ -1,13 +1,17 @@
 const http = require("http");
 const seed = require("../src/data/seed-directory.json");
 const { createMemoryDirectoryStore } = require("../src/server/directory/store");
-const { createMemorySearchAdapter } = require("../src/server/search/memorySearchAdapter");
-const { createAppServer } = require("../src/server/http");
+const { createAppServer, createContext } = require("../src/server/http");
 
 function createTestContext(options = {}) {
   const store = createMemoryDirectoryStore(options.data || seed);
-  const searchAdapter = createMemorySearchAdapter(store, options.searchOptions || {});
-  return { store, searchAdapter };
+  return createContext({
+    store,
+    searchOptions: {
+      backend: "memory",
+      memoryOptions: options.searchOptions || {}
+    }
+  });
 }
 
 function listen(server) {

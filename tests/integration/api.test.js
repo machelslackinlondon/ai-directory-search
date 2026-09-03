@@ -9,6 +9,9 @@ test("search API returns ranked records with match explanations", async () => {
     assert.equal(response.statusCode, 200);
     assert.equal(response.body.results[0].id, "atelier-north-architecture");
     assert.ok(response.body.results[0].whyMatched);
+    assert.equal(response.body.backend, "memory");
+    assert.equal(response.body.fallback, false);
+    assert.equal(response.body.fallbackReason, null);
   } finally {
     await close(server);
   }

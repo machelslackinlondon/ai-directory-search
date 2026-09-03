@@ -267,6 +267,7 @@ function createMemorySearchAdapter(store, options = {}) {
       tookMs: Number(elapsedMs.toFixed(3)),
       backend: "memory",
       fallback: false,
+      fallbackReason: null,
       facets,
       results: sorted
     };
@@ -276,6 +277,7 @@ function createMemorySearchAdapter(store, options = {}) {
 
   return {
     name: "memory",
+    async close() {},
     async getEntry(id) { return store.getEntry(id); },
     async listCategories() { return store.getTaxonomy().categories; },
     reindex,
